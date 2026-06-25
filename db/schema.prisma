@@ -1,0 +1,728 @@
+// Prisma ORM 7 reference schema for AdFlow Console.
+// Merge/adjust auth tables using the installed Better Auth version's official generator.
+// Database connection URL belongs in prisma.config.ts in Prisma 7.
+
+generator client {
+  provider               = "prisma-client"
+  output                 = "../generated/prisma"
+  runtime                = "nodejs"
+  moduleFormat           = "esm"
+  importFileExtension    = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  OPERATOR
+  ANALYST
+  VIEWER
+}
+
+enum ConnectionMode {
+  LIVE
+  DEMO
+}
+
+enum ConnectionStatus {
+  HEALTHY
+  EXPIRING
+  EXPIRED
+  REVOKED
+  ERROR
+  DISCONNECTED
+}
+
+enum DataSourceMode {
+  LIVE
+  DEMO
+}
+
+enum EntityLevel {
+  ACCOUNT
+  CAMPAIGN
+  ADSET
+  AD
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+  CANCELLED
+  UNKNOWN_OUTCOME
+}
+
+enum DraftStatus {
+  DRAFT
+  PUBLISHING
+  PUBLISHED
+  FAILED
+}
+
+enum MutationStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+  UNKNOWN_OUTCOME
+  RECONCILING
+  CANCELLED
+}
+
+enum ReportStatus {
+  QUEUED
+  STARTED
+  META_RUNNING
+  META_COMPLETED
+  INGESTING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum AuditOutcome {
+  SUCCESS
+  PARTIAL
+  DENIED
+  FAILED
+  UNKNOWN
+}
+
+model User {
+  id            String       @id @default(uuid()) @db.Uuid
+  name          String?
+  email         String       @unique
+  emailVerified Boolean      @default(false)
+  image         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  sessions      AuthSession[]
+  authAccounts  AuthAccount[]
+  memberships   Membership[]
+  drafts        Draft[]
+  savedViews    SavedView[]
+  reportPresets ReportPreset[]
+  auditLogs     AuditLog[]    @relation("AuditActor")
+  mutations     MutationRequest[] @relation("MutationActor")
+}
+
+model AuthSession {
+  id        String   @id @default(uuid()) @db.Uuid
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model AuthAccount {
+  id                    String   @id @default(uuid()) @db.Uuid
+  providerId            String
+  providerAccountId     String
+  accessTokenCiphertext String?
+  refreshTokenCiphertext String?
+  accessTokenExpiresAt  DateTime?
+  scope                  String?
+  passwordHash           String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, providerAccountId])
+  @@index([userId])
+}
+
+model Verification {
+  id         String   @id @default(uuid()) @db.Uuid
+  identifier String
+  valueHash  String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@unique([identifier, valueHash])
+  @@index([expiresAt])
+}
+
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships   Membership[]
+  connections   MetaConnection[]
+  adAccounts    AdAccount[]
+  campaigns     CampaignMirror[]
+  adSets        AdSetMirror[]
+  ads           AdMirror[]
+  creatives     CreativeMirror[]
+  insights      InsightFact[]
+  savedViews    SavedView[]
+  drafts        Draft[]
+  syncJobs      SyncJob[]
+  mutations     MutationRequest[]
+  auditLogs     AuditLog[]
+  reportPresets ReportPreset[]
+  reportRuns    ReportRun[]
+  exportFiles   ExportFile[]
+  oauthStates   OAuthState[]
+  apiRequestLogs ApiRequestLog[]
+}
+
+model Membership {
+  id             String           @id @default(uuid()) @db.Uuid
+  role           OrganizationRole
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String       @db.Uuid
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+}
+
+model OAuthState {
+  id             String   @id @default(uuid()) @db.Uuid
+  stateHash      String   @unique
+  intent         String
+  returnTo       String
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String       @db.Uuid
+
+  @@index([organizationId, userId])
+  @@index([expiresAt])
+}
+
+model MetaConnection {
+  id                    String           @id @default(uuid()) @db.Uuid
+  mode                  ConnectionMode
+  status                ConnectionStatus @default(HEALTHY)
+  metaUserId            String?
+  metaBusinessIds       Json?
+  scopes                String[]
+  tokenCiphertext       String?
+  tokenIv               String?
+  tokenAuthTag          String?
+  tokenKeyVersion       String?
+  tokenExpiresAt        DateTime?
+  lastValidatedAt       DateTime?
+  revokedAt             DateTime?
+  lastErrorCode         String?
+  lastErrorSummary      String?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  adAccounts     AdAccount[]
+  syncJobs       SyncJob[]
+  mutations      MutationRequest[]
+  reportRuns     ReportRun[]
+
+  @@index([organizationId, status])
+  @@index([tokenExpiresAt])
+}
+
+model AdAccount {
+  id                       String         @id @default(uuid()) @db.Uuid
+  metaId                   String
+  accountId                String
+  name                     String
+  status                   String
+  disableReason            String?
+  currency                 String
+  timezoneName             String
+  timezoneOffsetHoursUtc   Decimal?       @db.Decimal(6, 2)
+  amountSpentMinor         BigInt?
+  balanceMinor             BigInt?
+  spendCapMinor            BigInt?
+  businessMetaId           String?
+  dataSource               DataSourceMode
+  isSelected               Boolean        @default(false)
+  isReadOnly               Boolean        @default(true)
+  primaryConversionAction  String?
+  lastEntitySyncAt         DateTime?
+  lastInsightsSyncAt       DateTime?
+  sourceLastSeenAt         DateTime?
+  isDeletedAtSource        Boolean        @default(false)
+  missingFullSyncCount     Int            @default(0)
+  rawJson                  Json?
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+
+  organizationId String         @db.Uuid
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connectionId   String         @db.Uuid
+  connection     MetaConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  campaigns      CampaignMirror[]
+  adSets         AdSetMirror[]
+  ads            AdMirror[]
+  creatives      CreativeMirror[]
+  insights       InsightFact[]
+  savedViews     SavedView[]
+  drafts         Draft[]
+  syncJobs       SyncJob[]
+  mutations      MutationRequest[]
+  reportPresets  ReportPreset[]
+  reportRuns     ReportRun[]
+
+  @@unique([organizationId, metaId])
+  @@index([organizationId, isSelected])
+  @@index([connectionId])
+}
+
+model CampaignMirror {
+  id                    String         @id @default(uuid()) @db.Uuid
+  metaId                String
+  name                  String
+  objective             String?
+  buyingType            String?
+  configuredStatus      String
+  effectiveStatus       String
+  dailyBudgetMinor      BigInt?
+  lifetimeBudgetMinor   BigInt?
+  budgetRemainingMinor  BigInt?
+  specialAdCategories   String[]
+  startTime             DateTime?
+  stopTime              DateTime?
+  sourceCreatedAt       DateTime?
+  sourceUpdatedAt       DateTime?
+  sourceLastSeenAt      DateTime?
+  isDeletedAtSource     Boolean        @default(false)
+  missingFullSyncCount  Int            @default(0)
+  issuesJson            Json?
+  rawJson               Json?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  adAccountId    String       @db.Uuid
+  adAccount      AdAccount    @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+  adSets         AdSetMirror[]
+  ads            AdMirror[]
+
+  @@unique([organizationId, adAccountId, metaId])
+  @@index([adAccountId, configuredStatus])
+  @@index([adAccountId, effectiveStatus])
+  @@index([adAccountId, name])
+  @@index([sourceUpdatedAt])
+}
+
+model AdSetMirror {
+  id                    String         @id @default(uuid()) @db.Uuid
+  metaId                String
+  campaignMetaId        String
+  name                  String
+  configuredStatus      String
+  effectiveStatus       String
+  optimizationGoal      String?
+  billingEvent          String?
+  bidStrategy           String?
+  bidAmountMinor        BigInt?
+  dailyBudgetMinor      BigInt?
+  lifetimeBudgetMinor   BigInt?
+  budgetRemainingMinor  BigInt?
+  destinationType       String?
+  startTime             DateTime?
+  endTime               DateTime?
+  targetingJson         Json?
+  promotedObjectJson    Json?
+  attributionSpecJson   Json?
+  issuesJson            Json?
+  sourceCreatedAt       DateTime?
+  sourceUpdatedAt       DateTime?
+  sourceLastSeenAt      DateTime?
+  isDeletedAtSource     Boolean        @default(false)
+  missingFullSyncCount  Int            @default(0)
+  rawJson               Json?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  organizationId String         @db.Uuid
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  adAccountId    String         @db.Uuid
+  adAccount      AdAccount      @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+  campaignId     String?        @db.Uuid
+  campaign       CampaignMirror? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  ads            AdMirror[]
+
+  @@unique([organizationId, adAccountId, metaId])
+  @@index([adAccountId, campaignMetaId])
+  @@index([adAccountId, configuredStatus])
+  @@index([adAccountId, effectiveStatus])
+  @@index([adAccountId, name])
+}
+
+model AdMirror {
+  id                    String         @id @default(uuid()) @db.Uuid
+  metaId                String
+  campaignMetaId        String
+  adSetMetaId           String
+  creativeMetaId        String?
+  name                  String
+  configuredStatus      String
+  effectiveStatus       String
+  trackingSpecsJson     Json?
+  conversionSpecsJson   Json?
+  issuesJson            Json?
+  sourceCreatedAt       DateTime?
+  sourceUpdatedAt       DateTime?
+  sourceLastSeenAt      DateTime?
+  isDeletedAtSource     Boolean        @default(false)
+  missingFullSyncCount  Int            @default(0)
+  rawJson               Json?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  organizationId String          @db.Uuid
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  adAccountId    String          @db.Uuid
+  adAccount      AdAccount       @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+  campaignId     String?         @db.Uuid
+  campaign       CampaignMirror? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  adSetId        String?         @db.Uuid
+  adSet          AdSetMirror?    @relation(fields: [adSetId], references: [id], onDelete: SetNull)
+  creativeId     String?         @db.Uuid
+  creative       CreativeMirror? @relation(fields: [creativeId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, adAccountId, metaId])
+  @@index([adAccountId, campaignMetaId])
+  @@index([adAccountId, adSetMetaId])
+  @@index([adAccountId, configuredStatus])
+  @@index([adAccountId, effectiveStatus])
+  @@index([adAccountId, name])
+}
+
+model CreativeMirror {
+  id                     String         @id @default(uuid()) @db.Uuid
+  metaId                 String
+  name                   String?
+  title                  String?
+  body                   String?
+  imageHash              String?
+  imageUrl               String?
+  thumbnailUrl           String?
+  callToActionType       String?
+  effectiveObjectStoryId String?
+  status                 String?
+  urlTags                String?
+  objectStorySpecJson    Json?
+  assetFeedSpecJson      Json?
+  sourceLastSeenAt       DateTime?
+  isDeletedAtSource      Boolean        @default(false)
+  rawJson                Json?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  adAccountId    String       @db.Uuid
+  adAccount      AdAccount    @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+  ads            AdMirror[]
+
+  @@unique([organizationId, adAccountId, metaId])
+  @@index([adAccountId, name])
+  @@index([adAccountId, imageHash])
+}
+
+model InsightFact {
+  id                    String      @id @default(uuid()) @db.Uuid
+  level                 EntityLevel
+  entityMetaId          String
+  dateStart             DateTime    @db.Date
+  dateStop              DateTime    @db.Date
+  timeIncrement         String
+  breakdownHash         String
+  breakdownJson         Json
+  attributionHash       String
+  attributionJson       Json?
+  currency              String
+  spend                 Decimal?    @db.Decimal(30, 10)
+  impressions           BigInt?
+  reach                 BigInt?
+  frequency             Decimal?    @db.Decimal(20, 10)
+  clicks                BigInt?
+  uniqueClicks          BigInt?
+  linkClicks            BigInt?
+  outboundClicks        BigInt?
+  conversions           Decimal?    @db.Decimal(30, 10)
+  conversionValue       Decimal?    @db.Decimal(30, 10)
+  ctr                    Decimal?    @db.Decimal(20, 10)
+  cpc                    Decimal?    @db.Decimal(30, 10)
+  cpm                    Decimal?    @db.Decimal(30, 10)
+  cpa                    Decimal?    @db.Decimal(30, 10)
+  roas                   Decimal?    @db.Decimal(30, 10)
+  actionsJson            Json?
+  actionValuesJson       Json?
+  costPerActionTypeJson  Json?
+  purchaseRoasJson       Json?
+  rawJson                Json?
+  syncedAt               DateTime    @default(now())
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  adAccountId    String       @db.Uuid
+  adAccount      AdAccount    @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, adAccountId, level, entityMetaId, dateStart, dateStop, timeIncrement, breakdownHash, attributionHash])
+  @@index([adAccountId, level, dateStart, dateStop])
+  @@index([adAccountId, entityMetaId, dateStart])
+  @@index([organizationId, syncedAt])
+}
+
+model SavedView {
+  id             String      @id @default(uuid()) @db.Uuid
+  name           String
+  level          EntityLevel
+  configJson     Json
+  isDefault      Boolean     @default(false)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  adAccountId    String       @db.Uuid
+  adAccount      AdAccount    @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+  userId         String       @db.Uuid
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId, adAccountId, level, name])
+  @@index([userId, adAccountId, level])
+}
+
+model Draft {
+  id             String      @id @default(uuid()) @db.Uuid
+  kind           String
+  name           String?
+  status         DraftStatus @default(DRAFT)
+  version        Int         @default(1)
+  payloadJson    Json
+  validationJson Json?
+  lastSavedAt    DateTime    @default(now())
+  publishedAt    DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  adAccountId    String       @db.Uuid
+  adAccount      AdAccount    @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+  userId         String       @db.Uuid
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mutations      MutationRequest[]
+
+  @@index([organizationId, userId, status])
+  @@index([adAccountId, updatedAt])
+}
+
+model SyncJob {
+  id               String      @id @default(uuid()) @db.Uuid
+  queueName        String
+  type             String
+  status           JobStatus   @default(QUEUED)
+  progress         Int         @default(0)
+  requestId        String
+  idempotencyKey   String
+  payloadJson      Json
+  checkpointJson   Json?
+  resultSummaryJson Json?
+  errorJson        Json?
+  attemptCount     Int         @default(0)
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  organizationId String         @db.Uuid
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connectionId   String?        @db.Uuid
+  connection     MetaConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  adAccountId    String?        @db.Uuid
+  adAccount      AdAccount?     @relation(fields: [adAccountId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, status, createdAt])
+  @@index([queueName, status])
+  @@index([requestId])
+}
+
+model MutationRequest {
+  id                   String         @id @default(uuid()) @db.Uuid
+  type                 String
+  status               MutationStatus @default(PENDING)
+  requestId            String
+  idempotencyKey       String
+  payloadHash          String
+  payloadJson          Json
+  resultJson           Json?
+  errorJson            Json?
+  metaObjectIdsJson    Json?
+  attemptCount         Int            @default(0)
+  startedAt            DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  organizationId String         @db.Uuid
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connectionId   String         @db.Uuid
+  connection     MetaConnection @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+  adAccountId    String         @db.Uuid
+  adAccount      AdAccount      @relation(fields: [adAccountId], references: [id], onDelete: Restrict)
+  actorUserId    String?        @db.Uuid
+  actor          User?          @relation("MutationActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  draftId        String?        @db.Uuid
+  draft          Draft?         @relation(fields: [draftId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([adAccountId, status, createdAt])
+  @@index([requestId])
+}
+
+model ReportPreset {
+  id             String      @id @default(uuid()) @db.Uuid
+  name           String
+  queryJson      Json
+  isShared       Boolean     @default(false)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  adAccountId    String       @db.Uuid
+  adAccount      AdAccount    @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+  userId         String       @db.Uuid
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reportRuns     ReportRun[]
+
+  @@unique([organizationId, userId, name])
+  @@index([adAccountId])
+}
+
+model ReportRun {
+  id                  String       @id @default(uuid()) @db.Uuid
+  status              ReportStatus @default(QUEUED)
+  requestId           String
+  queryHash           String
+  queryJson           Json
+  metaReportRunId     String?
+  progress            Int          @default(0)
+  rowCount            Int?
+  resultSummaryJson   Json?
+  errorJson           Json?
+  startedAt           DateTime?
+  completedAt         DateTime?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  organizationId String         @db.Uuid
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connectionId   String         @db.Uuid
+  connection     MetaConnection @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+  adAccountId    String         @db.Uuid
+  adAccount      AdAccount      @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+  presetId       String?        @db.Uuid
+  preset         ReportPreset?  @relation(fields: [presetId], references: [id], onDelete: SetNull)
+  exports        ExportFile[]
+
+  @@index([organizationId, status, createdAt])
+  @@index([adAccountId, queryHash])
+  @@index([metaReportRunId])
+}
+
+model ExportFile {
+  id             String   @id @default(uuid()) @db.Uuid
+  objectKey      String   @unique
+  fileName       String
+  contentType    String
+  sizeBytes      BigInt?
+  checksum       String?
+  expiresAt      DateTime
+  downloadedAt   DateTime?
+  createdAt      DateTime @default(now())
+
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  reportRunId    String?      @db.Uuid
+  reportRun      ReportRun?   @relation(fields: [reportRunId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, expiresAt])
+}
+
+model AuditLog {
+  id             String       @id @default(uuid()) @db.Uuid
+  action         String
+  resourceType   String
+  resourceId     String?
+  metaIdMasked   String?
+  outcome        AuditOutcome
+  requestId      String
+  jobId          String?
+  beforeJson     Json?
+  afterJson      Json?
+  summaryJson    Json?
+  ipHash         String?
+  userAgentHash  String?
+  createdAt      DateTime     @default(now())
+
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actorUserId    String?      @db.Uuid
+  actor          User?        @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([requestId])
+  @@index([resourceType, resourceId])
+}
+
+model ApiRequestLog {
+  id               String   @id @default(uuid()) @db.Uuid
+  service          String
+  operation        String
+  requestId        String
+  durationMs       Int
+  outcome          String
+  httpStatus       Int?
+  metaErrorCode    Int?
+  metaErrorSubcode Int?
+  fbtraceId        String?
+  rateLimitJson    Json?
+  createdAt        DateTime @default(now())
+
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([operation, outcome, createdAt])
+  @@index([requestId])
+}

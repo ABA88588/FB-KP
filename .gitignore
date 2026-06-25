@@ -1,0 +1,42 @@
+# Dependencies and build outputs
+node_modules/
+.pnpm-store/
+.next/
+dist/
+build/
+coverage/
+playwright-report/
+test-results/
+.turbo/
+*.tsbuildinfo
+.agents/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+
+# Logs and local data
+*.log
+logs/
+*.sqlite
+*.sqlite3
+*.db
+exports/
+uploads/
+.tmp/
+tmp/
+
+# OS and IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Prisma generated local artifacts
+packages/db/generated/

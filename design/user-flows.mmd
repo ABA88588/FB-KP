@@ -1,0 +1,36 @@
+flowchart TD
+  A[登录] --> B{连接方式}
+  B -->|Meta OAuth| C[校验 state 并交换 Token]
+  B -->|演示账户| D[创建 Demo Connection]
+  C --> E[选择广告账户]
+  D --> E
+  E --> F[后台首次同步]
+  F --> G[总览]
+
+  G --> H[广告管理]
+  H --> I{操作}
+  I -->|筛选/查看| J[详情抽屉]
+  I -->|批量启停| K[确认影响]
+  K --> L[进入 Mutation Queue]
+  L --> M{结果}
+  M -->|成功| N[刷新本地镜像]
+  M -->|部分失败| O[逐项错误与重试建议]
+  M -->|未知结果| P[对账后再决定]
+
+  G --> Q[新建广告]
+  Q --> Q1[Campaign]
+  Q1 --> Q2[Ad Set]
+  Q2 --> Q3[Creative / Ad]
+  Q3 --> Q4[审核]
+  Q4 --> R{写入守卫通过?}
+  R -->|否| S[保存草稿并解释原因]
+  R -->|是| T[发布为 PAUSED]
+  T --> M
+
+  G --> U[自定义报表]
+  U --> V[选择指标与 Breakdown]
+  V --> W{查询规模}
+  W -->|小| X[同步 Insights]
+  W -->|大| Y[异步 Insights Job]
+  X --> Z[表格/图表/CSV]
+  Y --> Z
