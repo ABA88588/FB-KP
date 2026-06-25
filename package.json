@@ -1,0 +1,23 @@
+{
+  "name": "adflow-console",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "scripts": {
+    "dev": "pnpm --filter @adflow/web dev",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "build": "turbo build",
+    "e2e": "pnpm --filter @adflow/web e2e"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@rolldown/binding-win32-x64-msvc": "1.1.2",
+    "@turbo/windows-64": "2.10.0",
+    "eslint": "10.5.0",
+    "lightningcss-win32-x64-msvc": "1.32.0",
+    "turbo": "2.10.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.62.0"
+  }
+}

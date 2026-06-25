@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AdFlow Console 原型</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="主导航">
+      <div class="brand">
+        <div class="brand-mark">A</div>
+        <div>
+          <strong>AdFlow</strong>
+          <span>广告工作台</span>
+        </div>
+      </div>
+
+      <button class="workspace-switcher" type="button">
+        <span class="workspace-avatar">云</span>
+        <span class="workspace-copy"><strong>云帆电商</strong><small>Owner</small></span>
+        <span class="chevron">⌄</span>
+      </button>
+
+      <nav class="nav-list">
+        <button class="nav-item active" data-page="overview"><span class="nav-icon">▦</span><span>总览</span></button>
+        <button class="nav-item" data-page="campaigns"><span class="nav-icon">◫</span><span>广告管理</span><span class="nav-count">42</span></button>
+        <button class="nav-item" data-page="creatives"><span class="nav-icon">▧</span><span>素材中心</span></button>
+        <button class="nav-item" data-page="reports"><span class="nav-icon">⌁</span><span>自定义报表</span></button>
+        <button class="nav-item" data-page="sync"><span class="nav-icon">↻</span><span>同步与错误</span><span class="dot danger"></span></button>
+        <button class="nav-item" data-page="settings"><span class="nav-icon">⚙</span><span>设置</span></button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="connection-card">
+          <div class="connection-row"><span class="status-dot success"></span><strong>演示连接正常</strong></div>
+          <div class="connection-meta">最后同步 6 分钟前</div>
+          <div class="connection-meta">不会写入 Meta</div>
+        </div>
+        <div class="unofficial">独立产品 · 非 Meta 官方工具</div>
+      </div>
+    </aside>
+
+    <section class="main-shell">
+      <header class="topbar">
+        <button class="account-picker" type="button">
+          <span class="account-logo">S</span>
+          <span class="account-copy"><strong>Seoul Beauty KR</strong><small>act_•••• 8291 · KRW · Asia/Seoul</small></span>
+          <span class="chevron">⌄</span>
+        </button>
+        <div class="topbar-spacer"></div>
+        <button class="top-control" type="button" id="date-control">近 7 天 <span>⌄</span></button>
+        <button class="top-control" type="button">对比：上一周期</button>
+        <button class="icon-control" type="button" id="refresh-button" aria-label="刷新">↻</button>
+        <div class="sync-state"><span class="status-dot success"></span>数据已更新</div>
+        <button class="icon-control" type="button" aria-label="帮助">?</button>
+        <button class="user-menu" type="button"><span>王</span><span class="chevron">⌄</span></button>
+      </header>
+
+      <div class="demo-banner">
+        <span class="demo-badge">演示数据</span>
+        当前页面使用确定性模拟数据，不会向 Meta 创建或修改任何对象。
+        <button type="button">查看连接</button>
+      </div>
+
+      <main id="main-content">
+        <section class="page active" id="page-overview" data-page="overview">
+          <div class="page-header">
+            <div>
+              <div class="eyebrow">广告账户 / Seoul Beauty KR</div>
+              <h1>广告总览</h1>
+              <p>2026年6月19日–6月25日 · Asia/Seoul · 报表更新于 6 分钟前</p>
+            </div>
+            <div class="page-actions">
+              <button class="button secondary" type="button">保存快照</button>
+              <button class="button primary open-wizard" type="button">＋ 新建广告</button>
+            </div>
+          </div>
+
+          <div class="metric-grid">
+            <article class="metric-card"><div class="metric-label">花费 <span>ⓘ</span></div><div class="metric-value">₩4,821,600</div><div class="metric-delta up">↑ 12.4% <span>vs 上一周期</span></div></article>
+            <article class="metric-card"><div class="metric-label">转化价值 <span>ⓘ</span></div><div class="metric-value">₩13,609,700</div><div class="metric-delta up">↑ 18.9% <span>vs 上一周期</span></div></article>
+            <article class="metric-card accent"><div class="metric-label">ROAS <span>ⓘ</span></div><div class="metric-value">2.82</div><div class="metric-delta up">↑ 5.8% <span>vs 上一周期</span></div></article>
+            <article class="metric-card"><div class="metric-label">购买 <span>ⓘ</span></div><div class="metric-value">386</div><div class="metric-delta up">↑ 9.3% <span>vs 上一周期</span></div></article>
+            <article class="metric-card"><div class="metric-label">每次购买成本 <span>ⓘ</span></div><div class="metric-value">₩12,491</div><div class="metric-delta down">↑ 2.8% <span>成本上升</span></div></article>
+            <article class="metric-card"><div class="metric-label">曝光 <span>ⓘ</span></div><div class="metric-value">1.84M</div><div class="metric-delta up">↑ 7.1% <span>vs 上一周期</span></div></article>
+            <article class="metric-card"><div class="metric-label">CTR <span>ⓘ</span></div><div class="metric-value">2.37%</div><div class="metric-delta down">↓ 0.3% <span>vs 上一周期</span></div></article>
+            <article class="metric-card"><div class="metric-label">CPC <span>ⓘ</span></div><div class="metric-value">₩286</div><div class="metric-delta up">↓ 4.5% <span>成本下降</span></div></article>
+          </div>
+
+          <div class="overview-grid">
+            <article class="panel chart-panel">
+              <div class="panel-header">
+                <div><h2>效果趋势</h2><p>花费与转化价值 · 日粒度</p></div>
+                <div class="legend"><span><i class="legend-line spend"></i>花费</span><span><i class="legend-line value"></i>转化价值</span></div>
+              </div>
+              <div class="chart-wrap" aria-label="花费和转化价值趋势图">
+                <svg viewBox="0 0 760 270" role="img">
+                  <g class="grid-lines">
+                    <line x1="54" y1="24" x2="735" y2="24"/><line x1="54" y1="78" x2="735" y2="78"/><line x1="54" y1="132" x2="735" y2="132"/><line x1="54" y1="186" x2="735" y2="186"/><line x1="54" y1="240" x2="735" y2="240"/>
+                  </g>
+                  <g class="axis-labels"><text x="4" y="28">₩2.4M</text><text x="12" y="82">₩1.8M</text><text x="12" y="136">₩1.2M</text><text x="20" y="190">₩600K</text><text x="40" y="244">0</text></g>
+                  <path class="area-path" d="M55,180 C110,166 130,170 168,147 C215,119 244,134 282,106 C330,78 355,91 395,82 C442,70 470,92 508,64 C558,35 586,56 623,47 C672,34 700,38 734,28 L734,240 L55,240 Z"/>
+                  <path class="line-path value-path" d="M55,180 C110,166 130,170 168,147 C215,119 244,134 282,106 C330,78 355,91 395,82 C442,70 470,92 508,64 C558,35 586,56 623,47 C672,34 700,38 734,28"/>
+                  <path class="line-path spend-path" d="M55,198 C104,188 132,194 168,176 C212,154 242,165 282,151 C329,134 357,149 395,128 C440,108 470,128 508,112 C553,92 588,110 623,98 C666,84 701,91 734,76"/>
+                  <g class="x-labels"><text x="42" y="264">6/19</text><text x="150" y="264">6/20</text><text x="260" y="264">6/21</text><text x="370" y="264">6/22</text><text x="480" y="264">6/23</text><text x="590" y="264">6/24</text><text x="700" y="264">6/25</text></g>
+                </svg>
+              </div>
+              <div class="chart-summary">本周期花费增长 12.4%，购买价值增长 18.9%，ROAS 提升 5.8%。</div>
+            </article>
+
+            <article class="panel health-panel">
+              <div class="panel-header"><div><h2>账户健康</h2><p>连接、投放与同步</p></div><button class="text-button" type="button" data-nav="sync">查看详情</button></div>
+              <div class="health-score"><div class="score-ring">86</div><div><strong>整体正常</strong><span>有 2 项需要关注</span></div></div>
+              <div class="health-list">
+                <div class="health-item"><span class="health-icon success">✓</span><div><strong>Meta 连接正常</strong><small>权限有效，演示连接</small></div></div>
+                <div class="health-item"><span class="health-icon success">✓</span><div><strong>数据同步正常</strong><small>最近更新 6 分钟前</small></div></div>
+                <div class="health-item"><span class="health-icon warning">!</span><div><strong>3 个广告无转化</strong><small>近 3 天花费超过 ₩150,000</small></div></div>
+                <div class="health-item"><span class="health-icon warning">!</span><div><strong>1 个素材频次偏高</strong><small>近 7 天频次为 5.8</small></div></div>
+              </div>
+            </article>
+          </div>
+
+          <div class="overview-bottom">
+            <article class="panel top-campaigns">
+              <div class="panel-header"><div><h2>广告系列表现</h2><p>按花费排序的前 5 项</p></div><button class="text-button" type="button" data-nav="campaigns">查看全部 →</button></div>
+              <div class="mini-table">
+                <div class="mini-row mini-head"><span>广告系列</span><span>花费</span><span>购买</span><span>CPA</span><span>ROAS</span></div>
+                <div class="mini-row"><span><i class="status-dot success"></i>Summer Glow｜转化</span><span>₩1,284,000</span><span>122</span><span>₩10,525</span><strong>3.84</strong></div>
+                <div class="mini-row"><span><i class="status-dot success"></i>Retargeting｜7D</span><span>₩968,400</span><span>88</span><span>₩11,005</span><strong>3.31</strong></div>
+                <div class="mini-row"><span><i class="status-dot success"></i>New Serum｜Broad</span><span>₩842,700</span><span>61</span><span>₩13,815</span><strong>2.46</strong></div>
+                <div class="mini-row"><span><i class="status-dot muted"></i>IG Reels｜Awareness</span><span>₩694,900</span><span>32</span><span>₩21,716</span><strong>1.72</strong></div>
+                <div class="mini-row"><span><i class="status-dot warning"></i>Beauty Bundle｜Test</span><span>₩511,600</span><span>18</span><span>₩28,422</span><strong>1.16</strong></div>
+              </div>
+            </article>
+
+            <article class="panel attention-panel">
+              <div class="panel-header"><div><h2>需要关注</h2><p>基于固定规则，不是 AI 建议</p></div></div>
+              <div class="attention-item"><span class="attention-rank high">高</span><div><strong>Beauty Bundle｜Test</strong><p>近 3 天花费 ₩246,000，购买 2，ROAS 0.71。</p></div><button type="button">查看</button></div>
+              <div class="attention-item"><span class="attention-rank medium">中</span><div><strong>Reels｜UGC 03</strong><p>频次 5.8，CTR 比前一周期下降 22%。</p></div><button type="button">查看</button></div>
+              <div class="attention-item"><span class="attention-rank low">低</span><div><strong>Token 有效期</strong><p>演示连接；真实连接需显示实际到期时间。</p></div><button type="button">设置</button></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="page" id="page-campaigns" data-page="campaigns">
+          <div class="page-header compact-header">
+            <div>
+              <div class="eyebrow">广告账户 / Seoul Beauty KR</div>
+              <h1>广告管理</h1>
+              <p>对象更新于 8 分钟前 · Insights 更新于 6 分钟前</p>
+            </div>
+            <div class="page-actions">
+              <button class="button secondary" type="button">导入草稿</button>
+              <button class="button primary open-wizard" type="button">＋ 新建广告</button>
+            </div>
+          </div>
+
+          <div class="entity-tabs" role="tablist">
+            <button class="entity-tab active" data-level="campaign" type="button">广告系列 <span>12</span></button>
+            <button class="entity-tab" data-level="adset" type="button">广告组 <span>28</span></button>
+            <button class="entity-tab" data-level="ad" type="button">广告 <span>42</span></button>
+          </div>
+
+          <section class="table-panel">
+            <div class="table-toolbar">
+              <div class="search-box"><span>⌕</span><input id="campaign-search" type="search" placeholder="搜索名称或 Meta ID" /></div>
+              <button class="button secondary compact" type="button">筛选 <span class="filter-count">2</span></button>
+              <button class="button secondary compact" type="button">状态：全部 ⌄</button>
+              <button class="button secondary compact" type="button">保存视图</button>
+              <div class="toolbar-spacer"></div>
+              <button class="button ghost compact" type="button">列</button>
+              <button class="button ghost compact" type="button">导出</button>
+              <button class="button ghost compact" type="button">⋯</button>
+            </div>
+            <div class="filter-chips">
+              <span class="filter-chip">有效状态 = 投放中 <button>×</button></span>
+              <span class="filter-chip">花费 &gt; ₩100,000 <button>×</button></span>
+              <button class="clear-filters" type="button">清除全部</button>
+            </div>
+
+            <div class="bulk-bar" id="bulk-bar">
+              <strong>已选择 <span id="selected-count">0</span> 项</strong>
+              <button type="button" data-bulk="active">启用</button>
+              <button type="button" data-bulk="paused">暂停</button>
+              <button type="button">修改预算</button>
+              <button type="button">复制</button>
+              <button type="button">更多 ⌄</button>
+              <span></span>
+              <button type="button" id="clear-selection">取消选择</button>
+            </div>
+
+            <div class="data-table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th class="check-col"><input id="select-all" type="checkbox" aria-label="全选" /></th>
+                    <th class="switch-col">开关</th>
+                    <th class="name-col">广告系列</th>
+                    <th>投放状态</th>
+                    <th class="num">预算</th>
+                    <th class="num sorted">花费 ↓</th>
+                    <th class="num">购买</th>
+                    <th class="num">每次购买成本</th>
+                    <th class="num">转化价值</th>
+                    <th class="num">ROAS</th>
+                    <th class="num">曝光</th>
+                    <th class="num">CTR</th>
+                    <th class="num">CPC</th>
+                    <th>更新时间</th>
+                    <th class="more-col"></th>
+                  </tr>
+                </thead>
+                <tbody id="campaign-table-body"></tbody>
+              </table>
+            </div>
+            <div class="table-footer"><span>显示 1–10，共 12 项</span><div><button type="button" disabled>‹</button><button type="button" class="active">1</button><button type="button">2</button><button type="button">›</button></div></div>
+          </section>
+        </section>
+
+        <section class="page" id="page-creatives" data-page="creatives">
+          <div class="page-header compact-header"><div><div class="eyebrow">广告账户 / Seoul Beauty KR</div><h1>素材中心</h1><p>图片、视频和已创建 Creative</p></div><div class="page-actions"><button class="button secondary" type="button">新建文件夹</button><button class="button primary" type="button">↑ 上传素材</button></div></div>
+          <div class="entity-tabs"><button class="entity-tab active">图片 <span>28</span></button><button class="entity-tab">视频 <span>14</span></button><button class="entity-tab">Creative <span>36</span></button></div>
+          <section class="panel creative-panel">
+            <div class="table-toolbar"><div class="search-box"><span>⌕</span><input placeholder="搜索素材" /></div><button class="button secondary compact">类型：全部 ⌄</button><button class="button secondary compact">最近使用 ⌄</button><div class="toolbar-spacer"></div><button class="button ghost compact">▦</button><button class="button ghost compact">☷</button></div>
+            <div class="creative-grid">
+              <article class="creative-card"><div class="creative-thumb thumb-a"><span>SUMMER<br/>GLOW</span></div><div class="creative-copy"><strong>summer_glow_hero_01.jpg</strong><span>1080 × 1350 · 1.8 MB</span><span>使用于 6 个广告</span></div><button>⋯</button></article>
+              <article class="creative-card"><div class="creative-thumb thumb-b"><span>NEW<br/>SERUM</span></div><div class="creative-copy"><strong>serum_launch_02.jpg</strong><span>1080 × 1080 · 1.2 MB</span><span>使用于 4 个广告</span></div><button>⋯</button></article>
+              <article class="creative-card"><div class="creative-thumb thumb-c"><span>20%<br/>OFF</span></div><div class="creative-copy"><strong>bundle_offer_kr.jpg</strong><span>1080 × 1350 · 2.1 MB</span><span>使用于 3 个广告</span></div><button>⋯</button></article>
+              <article class="creative-card"><div class="creative-thumb thumb-d"><span>UGC<br/>ROUTINE</span></div><div class="creative-copy"><strong>ugc_routine_cover.jpg</strong><span>1080 × 1920 · 1.6 MB</span><span>使用于 5 个广告</span></div><button>⋯</button></article>
+              <article class="creative-card"><div class="creative-thumb thumb-e"><span>BEAUTY<br/>SET</span></div><div class="creative-copy"><strong>beauty_set_flatlay.jpg</strong><span>1200 × 1200 · 2.4 MB</span><span>未使用</span></div><button>⋯</button></article>
+              <article class="creative-card upload-card"><div>＋</div><strong>上传新素材</strong><span>JPG、PNG、MP4</span></article>
+            </div>
+          </section>
+        </section>
+
+        <section class="page" id="page-reports" data-page="reports">
+          <div class="page-header compact-header"><div><div class="eyebrow">广告账户 / Seoul Beauty KR</div><h1>自定义报表</h1><p>使用允许的指标和 Breakdown 构建报表</p></div><div class="page-actions"><button class="button secondary" type="button">打开预设</button><button class="button secondary" type="button">保存预设</button></div></div>
+          <div class="report-layout">
+            <aside class="report-builder panel">
+              <div class="builder-heading"><h2>查询配置</h2><span>已保存</span></div>
+              <label>层级<select><option>广告 Ad</option><option>广告组 Ad Set</option><option>广告系列 Campaign</option></select></label>
+              <label>日期范围<button class="field-button">2026/05/27 – 2026/06/25 <span>▣</span></button></label>
+              <label>时间粒度<select><option>按天</option><option>按周</option><option>按月</option></select></label>
+              <div class="builder-section"><div class="builder-label">指标 <button>编辑</button></div><div class="token-list"><span>花费 ×</span><span>曝光 ×</span><span>点击 ×</span><span>购买 ×</span><span>转化价值 ×</span><span>ROAS ×</span></div></div>
+              <div class="builder-section"><div class="builder-label">Breakdown <button>添加</button></div><div class="token-list"><span>Publisher platform ×</span></div><div class="compatibility ok">✓ 当前组合受支持</div></div>
+              <label>归因<select><option>使用账户归因设置</option></select></label>
+              <div class="query-estimate"><span>预计规模</span><strong>中等 · 约 640 行</strong><small>将使用异步报表任务</small></div>
+              <button class="button primary full" id="run-report" type="button">运行报表</button>
+            </aside>
+            <section class="report-result panel">
+              <div class="report-result-header"><div><h2>广告效果报表</h2><p>Ad · 日粒度 · Publisher platform</p></div><div><button class="button secondary compact">图表</button><button class="button secondary compact">导出 CSV</button></div></div>
+              <div class="report-progress" id="report-progress"><div><span>异步报表已完成</span><strong>100%</strong></div><div class="progress-track"><i></i></div><small>640 行 · 生成于 2 分钟前</small></div>
+              <div class="report-chart">
+                <svg viewBox="0 0 800 220"><g class="grid-lines"><line x1="40" y1="25" x2="780" y2="25"/><line x1="40" y1="80" x2="780" y2="80"/><line x1="40" y1="135" x2="780" y2="135"/><line x1="40" y1="190" x2="780" y2="190"/></g><path class="report-line facebook" d="M42,162 C95,146 115,151 158,128 C210,101 238,116 280,91 C332,61 358,78 406,67 C452,55 488,78 530,53 C579,24 610,43 652,36 C704,25 742,34 778,22"/><path class="report-line instagram" d="M42,179 C92,169 116,172 158,156 C208,135 236,145 280,128 C330,108 362,121 406,103 C454,88 486,105 530,84 C578,65 610,77 652,61 C704,49 742,53 778,42"/></svg>
+                <div class="legend"><span><i class="legend-line value"></i>Facebook</span><span><i class="legend-line spend"></i>Instagram</span></div>
+              </div>
+              <div class="report-table"><div class="report-row head"><span>日期</span><span>平台</span><span>花费</span><span>曝光</span><span>点击</span><span>购买</span><span>ROAS</span></div><div class="report-row"><span>2026-06-25</span><span>Facebook</span><span>₩398,400</span><span>142,830</span><span>3,418</span><span>42</span><strong>3.14</strong></div><div class="report-row"><span>2026-06-25</span><span>Instagram</span><span>₩316,200</span><span>118,406</span><span>2,926</span><span>31</span><strong>2.67</strong></div><div class="report-row"><span>2026-06-24</span><span>Facebook</span><span>₩372,100</span><span>136,244</span><span>3,201</span><span>38</span><strong>3.02</strong></div><div class="report-row"><span>2026-06-24</span><span>Instagram</span><span>₩298,800</span><span>109,870</span><span>2,704</span><span>29</span><strong>2.51</strong></div></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="page" id="page-sync" data-page="sync">
+          <div class="page-header compact-header"><div><div class="eyebrow">系统状态</div><h1>同步与错误</h1><p>跟踪后台任务、API 错误和数据新鲜度</p></div><div class="page-actions"><button class="button secondary">重新检查连接</button><button class="button primary" id="sync-now">立即同步</button></div></div>
+          <div class="entity-tabs"><button class="entity-tab active">同步任务 <span>8</span></button><button class="entity-tab">API 错误 <span class="danger-text">2</span></button><button class="entity-tab">数据新鲜度</button><button class="entity-tab">审计日志</button></div>
+          <section class="panel sync-panel">
+            <div class="sync-summary"><article><span>运行中</span><strong>1</strong></article><article><span>过去 24h 成功</span><strong>37</strong></article><article><span>部分失败</span><strong>1</strong></article><article><span>未解决错误</span><strong class="danger-text">2</strong></article></div>
+            <div class="sync-table"><div class="sync-row head"><span>任务</span><span>范围</span><span>状态</span><span>进度</span><span>开始时间</span><span>耗时</span><span>请求 ID</span></div><div class="sync-row"><span><strong>同步 Insights</strong><small>meta-sync / sync-insights</small></span><span>近 7 天 · Ad</span><span><i class="status-dot info"></i>运行中</span><span><div class="mini-progress"><i style="width:68%"></i></div>68%</span><span>10:42:18</span><span>1m 12s</span><span class="mono">req_8d91…</span></div><div class="sync-row"><span><strong>同步广告对象</strong><small>meta-sync / sync-entities</small></span><span>Campaign / Ad Set / Ad</span><span><i class="status-dot success"></i>成功</span><span>100%</span><span>10:34:02</span><span>48s</span><span class="mono">req_27bc…</span></div><div class="sync-row"><span><strong>批量暂停</strong><small>meta-mutations / apply-batch</small></span><span>3 个 Campaign</span><span><i class="status-dot warning"></i>部分失败</span><span>2 / 3</span><span>09:16:44</span><span>9s</span><span class="mono">req_114f…</span></div><div class="sync-row error-row"><span><strong>异步报表</strong><small>meta-reports / poll-report</small></span><span>30 天 · Ad</span><span><i class="status-dot danger"></i>失败</span><span>—</span><span>08:42:10</span><span>4m 30s</span><span class="mono">req_a20e…</span></div></div>
+            <div class="error-detail"><div class="error-icon">!</div><div><strong>报表任务因限流未完成</strong><p>系统已停止非紧急任务，并将在安全窗口后重试。缓存数据仍可查看。</p><div class="error-meta"><span>内部码：META_RATE_LIMITED</span><span>可重试：是</span><span>fbtrace_id：A1b2••••</span></div></div><button class="button secondary compact">查看任务</button></div>
+          </section>
+        </section>
+
+        <section class="page" id="page-settings" data-page="settings">
+          <div class="page-header compact-header"><div><div class="eyebrow">组织 / 云帆电商</div><h1>设置</h1><p>管理连接、账户、成员和安全策略</p></div></div>
+          <div class="settings-layout"><aside class="settings-nav"><button class="active">Meta 连接</button><button>广告账户</button><button>成员与角色</button><button>指标设置</button><button>安全与审计</button></aside><section class="settings-content"><article class="panel connection-detail"><div class="connection-title"><div class="account-logo large">M</div><div><h2>Meta 演示连接</h2><p>用于 UI、测试和开发，不包含真实 Token</p></div><span class="badge success">健康</span></div><div class="detail-grid"><div><span>连接类型</span><strong>Demo Provider</strong></div><div><span>数据来源</span><strong>确定性 Fixture</strong></div><div><span>权限</span><strong>ads_read · ads_management（模拟）</strong></div><div><span>最近验证</span><strong>刚刚</strong></div><div><span>写操作</span><strong class="warning-text">仅模拟，不发送到 Meta</strong></div><div><span>关联账户</span><strong>2</strong></div></div><div class="connection-actions"><button class="button secondary">重置演示数据</button><button class="button danger-button">断开连接</button></div></article><article class="panel"><div class="panel-header"><div><h2>生产连接要求</h2><p>启用真实 Meta 连接前</p></div></div><div class="checklist"><div><span class="check success">✓</span><div><strong>服务端 Token 加密</strong><small>Access Token 不进入浏览器</small></div></div><div><span class="check success">✓</span><div><strong>App Secret Proof</strong><small>每次 Graph 请求服务端生成</small></div></div><div><span class="check warning">!</span><div><strong>Meta App 审核</strong><small>需要在实际 App 控制台完成，代码不能代替审核</small></div></div><div><span class="check warning">!</span><div><strong>写入开关关闭</strong><small>ENABLE_META_WRITES=false</small></div></div></div></article></section></div>
+        </section>
+      </main>
+    </section>
+  </div>
+
+  <div class="drawer-backdrop" id="drawer-backdrop"></div>
+  <aside class="inspector-drawer" id="inspector-drawer" aria-hidden="true">
+    <div class="drawer-header"><div><span class="badge success" id="drawer-status">投放中</span><h2 id="drawer-title">Summer Glow｜转化</h2><p id="drawer-meta">Campaign · 2384••••912</p></div><button class="drawer-close" id="drawer-close" type="button">×</button></div>
+    <div class="drawer-tabs"><button class="active">概览</button><button>设置</button><button>趋势</button><button>活动</button></div>
+    <div class="drawer-content">
+      <div class="drawer-metrics"><article><span>花费</span><strong id="drawer-spend">₩1,284,000</strong></article><article><span>购买</span><strong id="drawer-purchases">122</strong></article><article><span>CPA</span><strong id="drawer-cpa">₩10,525</strong></article><article><span>ROAS</span><strong id="drawer-roas">3.84</strong></article></div>
+      <section class="drawer-section"><h3>投放状态</h3><div class="setting-row"><span>已配置状态</span><strong>ACTIVE</strong></div><div class="setting-row"><span>有效状态</span><strong class="success-text">ACTIVE</strong></div><div class="setting-row"><span>最近更新</span><strong>今天 09:42</strong></div></section>
+      <section class="drawer-section"><h3>预算与排期</h3><div class="setting-row"><span>预算方式</span><strong>Campaign 日预算</strong></div><div class="setting-row"><span>日预算</span><strong>₩260,000</strong></div><div class="setting-row"><span>开始时间</span><strong>2026-06-01 00:00 KST</strong></div><div class="setting-row"><span>结束时间</span><strong>持续投放</strong></div></section>
+      <section class="drawer-section"><h3>近 7 天趋势</h3><div class="drawer-chart"><svg viewBox="0 0 420 110"><path d="M8,90 C55,82 70,84 104,65 C150,42 170,59 210,43 C253,26 276,42 315,27 C355,15 382,21 412,10"/></svg></div></section>
+    </div>
+    <div class="drawer-footer"><button class="button secondary">复制</button><button class="button primary">编辑设置</button></div>
+  </aside>
+
+  <div class="modal-backdrop" id="wizard-backdrop"></div>
+  <section class="wizard-modal" id="wizard-modal" aria-hidden="true">
+    <header class="wizard-header"><div><div class="eyebrow">新建广告 · 草稿自动保存</div><h1>创建销售广告</h1></div><div class="draft-state" id="draft-state">✓ 草稿已保存</div><button id="wizard-close" type="button">×</button></header>
+    <div class="wizard-stepper"><button class="wizard-step active" data-step="1"><span>1</span><div><strong>广告系列</strong><small>目标与预算方式</small></div></button><i></i><button class="wizard-step" data-step="2"><span>2</span><div><strong>广告组</strong><small>受众、预算与版位</small></div></button><i></i><button class="wizard-step" data-step="3"><span>3</span><div><strong>广告与素材</strong><small>身份、文案和预览</small></div></button><i></i><button class="wizard-step" data-step="4"><span>4</span><div><strong>审核发布</strong><small>检查与确认</small></div></button></div>
+    <div class="wizard-body">
+      <div class="wizard-form">
+        <section class="wizard-pane active" data-pane="1"><div class="form-card"><h2>广告系列设置</h2><p>创建后默认保持暂停，确认无误后再启用。</p><label>广告系列名称 <em>*</em><input value="KR｜Summer Glow｜Sales｜Broad" /></label><div class="form-grid"><label>购买类型<select><option>Auction</option></select></label><label>广告目标<select><option>Sales</option></select></label></div><label>特殊广告类别<select><option>不属于特殊广告类别</option></select></label></div><div class="form-card"><h2>预算方式</h2><label class="radio-card selected"><input type="radio" checked /><span><strong>广告系列预算</strong><small>由 Meta 在广告组间分配预算</small></span></label><label class="radio-card"><input type="radio" /><span><strong>广告组预算</strong><small>在下一步分别设置预算</small></span></label></div></section>
+        <section class="wizard-pane" data-pane="2"><div class="form-card"><h2>转化与优化</h2><div class="form-grid"><label>转化位置<select><option>网站</option></select></label><label>优化目标<select><option>最大化转化数量</option></select></label></div><label>Pixel / 数据集<select><option>Seoul Beauty Web Pixel · 9342••••</option></select></label></div><div class="form-card"><h2>预算与排期</h2><div class="form-grid"><label>日预算<input value="260000" /></label><label>币种<input value="KRW" disabled /></label></div><div class="form-grid"><label>开始时间<input value="2026-06-26 09:00" /></label><label>结束时间<input value="持续投放" /></label></div><div class="timezone-note">时间按广告账户时区 Asia/Seoul (KST) 解释。</div></div><div class="form-card"><h2>受众与版位</h2><div class="form-grid"><label>地区<input value="韩国" /></label><label>年龄<input value="23–45" /></label></div><label>版位<select><option>Advantage+ 版位</option></select></label></div></section>
+        <section class="wizard-pane" data-pane="3"><div class="form-card"><h2>身份与素材</h2><div class="form-grid"><label>Facebook Page<select><option>Seoul Beauty Official</option></select></label><label>Instagram Account<select><option>@seoulbeauty.kr</option></select></label></div><label>广告格式<select><option>单图或视频</option></select></label><button class="asset-picker" type="button"><span class="asset-preview">SUMMER<br/>GLOW</span><span><strong>summer_glow_hero_01.jpg</strong><small>1080 × 1350 · 已在素材库</small></span><em>更换</em></button></div><div class="form-card"><h2>文案与链接</h2><label>主文案<textarea>夏日透亮肌，从一套高效护理开始。限时组合优惠，立即查看。</textarea></label><label>标题<input value="Summer Glow 护理组合" /></label><div class="form-grid"><label>网站 URL<input value="https://example.com/summer-glow" /></label><label>CTA<select><option>立即购买</option></select></label></div></div></section>
+        <section class="wizard-pane" data-pane="4"><div class="review-alert"><span>✓</span><div><strong>基础检查通过</strong><p>将创建 1 个 Campaign、1 个 Ad Set、1 个 Creative 和 1 个 Ad，全部为 PAUSED。</p></div></div><div class="review-card"><h2>广告系列</h2><div><span>名称</span><strong>KR｜Summer Glow｜Sales｜Broad</strong></div><div><span>目标</span><strong>Sales</strong></div><div><span>状态</span><strong>PAUSED</strong></div></div><div class="review-card"><h2>广告组</h2><div><span>转化位置</span><strong>网站</strong></div><div><span>日预算</span><strong>₩260,000</strong></div><div><span>受众</span><strong>韩国 · 23–45 · Advantage+ 版位</strong></div></div><div class="review-card"><h2>写入检查</h2><div><span>数据模式</span><strong class="warning-text">Demo Provider</strong></div><div><span>结果</span><strong>仅模拟创建，不发送到 Meta</strong></div><div><span>生产写入开关</span><strong class="warning-text">关闭</strong></div></div></section>
+      </div>
+      <aside class="wizard-preview"><div class="preview-heading"><div><strong>广告预览</strong><span>Instagram Feed</span></div><button>切换版位 ⌄</button></div><div class="phone-preview"><div class="social-head"><span class="profile-dot">S</span><div><strong>seoulbeauty.kr</strong><small>赞助内容</small></div><em>⋯</em></div><div class="preview-image">SUMMER<br/><strong>GLOW</strong><small>SKINCARE SET</small></div><div class="social-copy"><div class="social-icons">♡　◯　⌁</div><p><strong>seoulbeauty.kr</strong> 夏日透亮肌，从一套高效护理开始……</p><div class="cta-row"><span>example.com</span><strong>立即购买 ›</strong></div></div></div><p class="preview-disclaimer">本地布局示意，以 Meta 实际预览和投放展示为准。</p></aside>
+    </div>
+    <footer class="wizard-footer"><button class="button secondary" id="wizard-back" type="button">取消</button><div><button class="button secondary" id="save-draft" type="button">保存草稿</button><button class="button primary" id="wizard-next" type="button">下一步：广告组 →</button></div></footer>
+  </section>
+
+  <div class="toast" id="toast" role="status"></div>
+  <script src="app.js"></script>
+</body>
+</html>
