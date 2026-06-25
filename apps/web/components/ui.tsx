@@ -2,7 +2,7 @@
 
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, Check, Info, Loader2, X } from "lucide-react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { cn, type DataState } from "@adflow/shared";
+import { cn, effectiveStatusTone, type DataState } from "@adflow/shared";
 import type { KpiMetric } from "@adflow/meta-client";
 
 export function Button({
@@ -27,7 +27,7 @@ export function StatusDot({ tone }: { tone: "success" | "warning" | "danger" | "
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  const tone = status.includes("投放") ? "active" : status.includes("学习") ? "warning" : status.includes("失败") ? "error" : "paused";
+  const tone = effectiveStatusTone(status);
   return (
     <span className={cn("status-badge", tone)}>
       <StatusDot tone={tone === "active" ? "success" : tone === "warning" ? "warning" : tone === "error" ? "danger" : "muted"} />
@@ -41,7 +41,7 @@ export function DemoModeBanner() {
     <div className="demo-banner">
       <span className="demo-badge">演示数据</span>
       当前页面使用确定性模拟数据，不会向 Meta 创建或修改任何对象。
-      <button type="button">查看连接</button>
+      <a href="/settings/connections">查看连接</a>
     </div>
   );
 }
@@ -214,9 +214,33 @@ export function ErrorState({ state }: { state: DataState }) {
   );
 }
 
+export function StateNotice({ state }: { state: Extract<DataState, "refreshing" | "stale" | "partial"> }) {
+  const copy: Record<"refreshing" | "stale" | "partial", { title: string; detail: string; tone: "info" | "warning" }> = {
+    refreshing: { title: "正在刷新", detail: "页面保留当前数据，后台同步任务更新完成后再替换结果。", tone: "info" },
+    stale: { title: "数据已过期", detail: "当前展示最近一次成功同步结果，建议手动刷新。", tone: "warning" },
+    partial: { title: "部分数据可用", detail: "已保留成功同步的数据，失败任务请到同步中心查看。", tone: "warning" }
+  };
+  const current = copy[state];
+  return (
+    <div className={cn("state-notice", current.tone)} role="status">
+      <AlertTriangle size={15} />
+      <strong>{current.title}</strong>
+      <span>{current.detail}</span>
+    </div>
+  );
+}
+
 export function StateGate({ state, children }: { state: DataState; children: ReactNode }) {
-  if (state === "loading" || state === "refreshing") return <LoadingSkeleton />;
+  if (state === "loading") return <LoadingSkeleton />;
   if (state === "empty" || state === "filtered-empty") return <EmptyState title={state === "empty" ? "暂无数据" : "筛选后无结果"} />;
+  if (state === "refreshing" || state === "stale" || state === "partial") {
+    return (
+      <>
+        <StateNotice state={state} />
+        {children}
+      </>
+    );
+  }
   if (state !== "success") return <ErrorState state={state} />;
   return <>{children}</>;
 }

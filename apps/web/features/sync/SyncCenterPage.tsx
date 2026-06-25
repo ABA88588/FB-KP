@@ -18,19 +18,56 @@ export function SyncCenterPage({
   showToast: (text: string, kind?: ToastKind) => void;
 }) {
   const [tab, setTab] = useState<(typeof tabs)[number]>("同步任务");
+  const [version, setVersion] = useState(0);
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [checkedAt, setCheckedAt] = useState("刚刚");
   const jobs = demoProvider.listSyncJobs();
-  const failed = jobs.find((job) => job.status === "failed");
+  const errorJobs = jobs.filter((job) => Boolean(job.error));
+  const visibleJobs = tab === "API 错误" ? errorJobs : jobs;
+  const selectedJob = jobs.find((job) => job.id === selectedJobId) ?? null;
+  const detailJob = tab === "API 错误" ? selectedJob?.error ? selectedJob : errorJobs[0] : selectedJob?.error ? selectedJob : null;
+  const summary = {
+    running: jobs.filter((job) => job.status === "running").length,
+    success: jobs.filter((job) => job.status === "success").length,
+    queued: jobs.filter((job) => job.status === "queued").length,
+    failed: jobs.filter((job) => job.status === "failed" || Boolean(job.error)).length
+  };
+  void version;
+
+  const enqueueSync = () => {
+    const job = demoProvider.enqueueSyncJob();
+    setTab("同步任务");
+    setSelectedJobId(job.id);
+    setVersion((current) => current + 1);
+    showToast("已新增立即同步任务，进度将在列表中更新", "success");
+    [
+      { delay: 500, progress: "34%", elapsed: "3s" },
+      { delay: 1100, progress: "72%", elapsed: "8s" },
+      { delay: 1800, progress: "100%", elapsed: "14s", status: "success" as const }
+    ].forEach((step) => {
+      window.setTimeout(() => {
+        demoProvider.updateSyncJob(job.id, step);
+        setVersion((current) => current + 1);
+      }, step.delay);
+    });
+  };
+
+  const checkConnection = () => {
+    const checked = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+    setCheckedAt(checked);
+    showToast("连接检查已完成：Demo Provider 正常", "success");
+  };
 
   return (
     <StateGate state={dataState}>
       <PageHeader
         eyebrow="系统状态"
         title="同步与错误"
-        description="跟踪后台任务、API 错误和数据新鲜度"
+        description={`跟踪后台任务、API 错误和数据新鲜度 · 最近检查 ${checkedAt}`}
         actions={
           <>
-            <Button onClick={() => showToast("连接检查已完成：Demo Provider 正常", "success")}>重新检查连接</Button>
-            <Button variant="primary" onClick={() => showToast("同步任务已排队，页面不会阻塞", "success")}><RefreshCcw size={14} /> 立即同步</Button>
+            <Button onClick={checkConnection}>重新检查连接</Button>
+            <Button variant="primary" onClick={enqueueSync}><RefreshCcw size={14} /> 立即同步</Button>
           </>
         }
       />
@@ -38,35 +75,35 @@ export function SyncCenterPage({
       <div className="entity-tabs">
         {tabs.map((item) => (
           <button key={item} className={cn("entity-tab", tab === item && "active")} type="button" onClick={() => setTab(item)}>
-            {item} {item === "同步任务" ? <span>8</span> : item === "API 错误" ? <span className="danger-text">2</span> : null}
+            {item} {item === "同步任务" ? <span>{jobs.length}</span> : item === "API 错误" ? <span className="danger-text">{errorJobs.length}</span> : null}
           </button>
         ))}
       </div>
 
       <section className="panel sync-panel">
         <div className="sync-summary">
-          <article><span>运行中</span><strong>1</strong></article>
-          <article><span>已完成</span><strong>37</strong></article>
-          <article><span>等待中</span><strong>1</strong></article>
-          <article><span>失败</span><strong className="danger-text">2</strong></article>
+          <article><span>运行中</span><strong>{summary.running}</strong></article>
+          <article><span>已完成</span><strong>{summary.success}</strong></article>
+          <article><span>等待中</span><strong>{summary.queued}</strong></article>
+          <article><span>失败</span><strong className="danger-text">{summary.failed}</strong></article>
         </div>
-        {tab === "同步任务" || tab === "API 错误" ? <SyncTable jobs={jobs} /> : null}
+        {tab === "同步任务" || tab === "API 错误" ? <SyncTable jobs={visibleJobs} selectedJobId={selectedJobId} onSelect={setSelectedJobId} /> : null}
         {tab === "数据新鲜度" ? <FreshnessPanel /> : null}
         {tab === "审计日志" ? <AuditPanel /> : null}
-        {failed?.error ? <ErrorDetail job={failed} /> : null}
+        {detailJob?.error ? <ErrorDetail job={detailJob} onFocus={() => { setTab("API 错误"); setSelectedJobId(detailJob.id); }} /> : null}
       </section>
     </StateGate>
   );
 }
 
-function SyncTable({ jobs }: { jobs: SyncJob[] }) {
+function SyncTable({ jobs, selectedJobId, onSelect }: { jobs: SyncJob[]; selectedJobId: string | null; onSelect: (id: string) => void }) {
   return (
     <div className="sync-table">
       <div className="sync-row head">
         <span>类型</span><span>广告账户</span><span>状态</span><span>进度</span><span>开始时间</span><span>结束时间</span><span>重试次数</span><span>错误</span><span>requestId</span>
       </div>
       {jobs.map((job) => (
-        <div className={cn("sync-row extended", job.status === "failed" && "error-row")} key={job.id}>
+        <button className={cn("sync-row extended", job.status === "failed" && "error-row", selectedJobId === job.id && "selected")} key={job.id} type="button" onClick={() => onSelect(job.id)}>
           <span><strong>{job.type}</strong><small>meta-sync / {job.id}</small></span>
           <span>Seoul Beauty KR</span>
           <span><StatusDot tone={jobTone(job.status)} />{job.status === "running" ? "运行中" : job.status === "success" ? "成功" : job.status === "partial" ? "部分失败" : "失败"}</span>
@@ -76,13 +113,13 @@ function SyncTable({ jobs }: { jobs: SyncJob[] }) {
           <span>{job.status === "partial" ? "1" : "0"}</span>
           <span>{job.error?.code ?? "—"}</span>
           <span className="mono">{job.requestId}</span>
-        </div>
+        </button>
       ))}
     </div>
   );
 }
 
-function ErrorDetail({ job }: { job: SyncJob }) {
+function ErrorDetail({ job, onFocus }: { job: SyncJob; onFocus: () => void }) {
   if (!job.error) return null;
   return (
     <div className="error-detail">
@@ -99,7 +136,7 @@ function ErrorDetail({ job }: { job: SyncJob }) {
         </div>
         <p className="error-action">推荐处理：{job.error.action}</p>
       </div>
-      <Button size="compact">查看任务</Button>
+      <Button size="compact" onClick={onFocus}>查看任务</Button>
     </div>
   );
 }

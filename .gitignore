@@ -6,7 +6,9 @@ dist/
 build/
 coverage/
 playwright-report/
-test-results/
+test-results/*
+!test-results/ui/
+!test-results/ui/*.png
 .turbo/
 *.tsbuildinfo
 .agents/

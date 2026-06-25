@@ -29,6 +29,15 @@ export function rowsToCsv(rows: ReadonlyArray<ReadonlyArray<string | number>>): 
   return rows.map((row) => row.map(safeCsvCell).join(",")).join("\n");
 }
 
+export type StatusBadgeTone = "active" | "warning" | "error" | "paused";
+
+export function effectiveStatusTone(status: string): StatusBadgeTone {
+  if (status === "投放中") return "active";
+  if (status.includes("学习") || status.includes("受限")) return "warning";
+  if (status.includes("失败")) return "error";
+  return "paused";
+}
+
 export function cn(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(" ");
 }

@@ -21,7 +21,23 @@ export function DetailDrawer({
   onToast: (message: string) => void;
 }) {
   const [tab, setTab] = useState<(typeof tabs)[number]>("概览");
+  const [copied, setCopied] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [editMode, setEditMode] = useState(false);
   const levelLabel = level === "campaign" ? "Campaign" : level === "adset" ? "Ad Set" : "Ad";
+
+  const copyEntity = async () => {
+    if (!entity) return;
+    await navigator.clipboard.writeText(JSON.stringify({
+      id: entity.id,
+      name: entity.name,
+      level,
+      status: entity.status,
+      budget: entity.budget
+    }, null, 2));
+    setCopied(true);
+    onToast("已复制演示对象配置到剪贴板");
+  };
 
   return (
     <>
@@ -48,22 +64,31 @@ export function DetailDrawer({
             </div>
             <div className="drawer-content">
               {tab === "概览" ? <OverviewTab entity={entity} /> : null}
-              {tab === "设置" ? <SettingsTab entity={entity} /> : null}
+              {tab === "设置" ? <SettingsTab entity={entity} editMode={editMode} /> : null}
               {tab === "趋势" ? <TrendTab /> : null}
               {tab === "活动" ? <ActivityTab /> : null}
             </div>
             <div className="drawer-footer">
-              <Button onClick={() => onToast("已复制演示对象配置")}>
-                <Copy size={14} /> 复制
+              <Button onClick={() => { void copyEntity(); }}>
+                <Copy size={14} /> {copied ? "已复制" : "复制"}
               </Button>
               {!readOnly ? (
-                <Button variant="primary" onClick={() => onToast("演示模式：编辑只会修改本地 Demo 数据")}>
-                  <Edit3 size={14} /> 编辑设置
+                <Button variant="primary" onClick={() => { setEditMode(true); setTab("设置"); onToast("已进入演示编辑状态"); }}>
+                  <Edit3 size={14} /> {editMode ? "编辑中" : "编辑设置"}
                 </Button>
               ) : null}
-              <Button>
-                <MoreHorizontal size={14} /> 更多
-              </Button>
+              <div className="drawer-more">
+                <Button onClick={() => setMoreOpen((open) => !open)}>
+                  <MoreHorizontal size={14} /> 更多
+                </Button>
+                {moreOpen ? (
+                  <div className="row-action-menu drawer">
+                    <button type="button" onClick={() => { setTab("活动"); setMoreOpen(false); }}>查看活动</button>
+                    <button type="button" onClick={() => { setTab("趋势"); setMoreOpen(false); }}>查看趋势</button>
+                    <button type="button" onClick={() => { setCopied(false); setMoreOpen(false); }}>重置复制状态</button>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </>
         ) : null}
@@ -102,10 +127,11 @@ function OverviewTab({ entity }: { entity: CampaignEntity }) {
   );
 }
 
-function SettingsTab({ entity }: { entity: CampaignEntity }) {
+function SettingsTab({ entity, editMode }: { entity: CampaignEntity; editMode: boolean }) {
   return (
     <section className="drawer-section">
       <h3>对象配置摘要</h3>
+      {editMode ? <div className="drawer-edit-note">演示编辑状态已开启，实际字段请在广告管理表格批量表单中保存。</div> : null}
       <div className="setting-row"><span>名称</span><strong>{entity.name}</strong></div>
       <div className="setting-row"><span>Meta ID</span><strong>{entity.id}</strong></div>
       <div className="setting-row"><span>默认创建状态</span><strong>PAUSED</strong></div>

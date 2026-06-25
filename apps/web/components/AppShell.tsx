@@ -2,7 +2,7 @@
 
 import { CalendarDays, ChevronDown, CircleHelp, FileBarChart, Grid3X3, Image, LayoutDashboard, RefreshCcw, Settings, SlidersHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { demoAccounts } from "@adflow/meta-client";
 import { cn } from "@adflow/shared";
 import type { PageKey } from "@/lib/app-types";
@@ -17,6 +17,13 @@ const navItems: Array<{ page: PageKey; label: string; href: string; icon: ReactN
   { page: "settings", label: "设置", href: "/settings/connections", icon: <Settings size={16} /> }
 ];
 
+const dateRanges = ["近 7 天", "近 14 天", "近 30 天"] as const;
+const compareRanges = ["上一周期", "去年同期", "不对比"] as const;
+const workspaces = [
+  { name: "云帆电商", role: "Owner", avatar: "云" },
+  { name: "Seoul Growth", role: "Operator", avatar: "S" }
+] as const;
+
 export function AppShell({
   page,
   onToast,
@@ -28,13 +35,70 @@ export function AppShell({
 }) {
   const router = useRouter();
   const activePage: PageKey = page === "campaigns-new" ? "campaigns" : page;
-  const account = demoAccounts[0] ?? {
+  const [workspaceIndex, setWorkspaceIndex] = useState(0);
+  const [accountIndex, setAccountIndex] = useState(0);
+  const [dateIndex, setDateIndex] = useState(0);
+  const [compareIndex, setCompareIndex] = useState(0);
+  const [syncLabel, setSyncLabel] = useState("数据已更新");
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [userOpen, setUserOpen] = useState(false);
+  const workspace = workspaces[workspaceIndex] ?? workspaces[0];
+  const account = demoAccounts[accountIndex] ?? {
     id: "act_demo",
     name: "Seoul Beauty KR",
     maskedId: "act_•••• 8291",
     currency: "KRW" as const,
     timezone: "Asia/Seoul",
     status: "healthy" as const
+  };
+
+  useEffect(() => {
+    window.localStorage.setItem("adflow.topbarState", JSON.stringify({
+      workspace: workspace.name,
+      account: account.id,
+      dateRange: dateRanges[dateIndex],
+      compare: compareRanges[compareIndex]
+    }));
+  }, [workspace.name, account.id, dateIndex, compareIndex]);
+
+  const cycleWorkspace = () => {
+    setWorkspaceIndex((current) => {
+      const next = (current + 1) % workspaces.length;
+      const nextWorkspace = workspaces[next] ?? workspaces[0];
+      onToast(`已切换组织：${nextWorkspace.name}`, "success");
+      return next;
+    });
+  };
+
+  const cycleAccount = () => {
+    setAccountIndex((current) => {
+      const next = (current + 1) % demoAccounts.length;
+      const nextAccountName = demoAccounts[next]?.name ?? "Seoul Beauty KR";
+      onToast(`已切换广告账户：${nextAccountName}`, "success");
+      return next;
+    });
+  };
+
+  const cycleDate = () => {
+    setDateIndex((current) => {
+      const next = (current + 1) % dateRanges.length;
+      onToast(`日期范围已切换：${dateRanges[next]}`, "success");
+      return next;
+    });
+  };
+
+  const cycleCompare = () => {
+    setCompareIndex((current) => {
+      const next = (current + 1) % compareRanges.length;
+      onToast(`对比周期：${compareRanges[next]}`, "info");
+      return next;
+    });
+  };
+
+  const refresh = () => {
+    setSyncLabel("正在刷新…");
+    onToast("已创建手动刷新任务，页面不会阻塞", "success");
+    window.setTimeout(() => setSyncLabel("刚刚刷新"), 700);
   };
 
   return (
@@ -47,9 +111,9 @@ export function AppShell({
             <span>广告工作台</span>
           </div>
         </div>
-        <button className="workspace-switcher" type="button" onClick={() => onToast("当前组织：云帆电商", "info")}>
-          <span className="workspace-avatar">云</span>
-          <span className="workspace-copy"><strong>云帆电商</strong><small>Owner</small></span>
+        <button className="workspace-switcher" type="button" onClick={cycleWorkspace}>
+          <span className="workspace-avatar">{workspace.avatar}</span>
+          <span className="workspace-copy"><strong>{workspace.name}</strong><small>{workspace.role}</small></span>
           <ChevronDown size={14} />
         </button>
         <nav className="nav-list">
@@ -79,7 +143,7 @@ export function AppShell({
 
       <section className="main-shell">
         <header className="topbar">
-          <button className="account-picker" type="button" onClick={() => onToast("已切换广告账户：Seoul Beauty KR", "success")}>
+          <button className="account-picker" type="button" onClick={cycleAccount}>
             <span className="account-logo">S</span>
             <span className="account-copy">
               <strong>{account.name}</strong>
@@ -88,21 +152,27 @@ export function AppShell({
             <ChevronDown size={14} />
           </button>
           <div className="topbar-spacer" />
-          <button className="top-control" type="button" onClick={() => onToast("日期范围已切换：近 7 天", "success")}>
-            <CalendarDays size={14} /> 近 7 天 <ChevronDown size={13} />
+          <button className="top-control" type="button" onClick={cycleDate}>
+            <CalendarDays size={14} /> {dateRanges[dateIndex]} <ChevronDown size={13} />
           </button>
-          <button className="top-control" type="button" onClick={() => onToast("对比周期：上一周期", "info")}>对比：上一周期</button>
-          <button className="icon-control" type="button" aria-label="刷新同步" onClick={() => onToast("已创建手动刷新任务，页面不会阻塞", "success")}>
+          <button className="top-control" type="button" onClick={cycleCompare}>对比：{compareRanges[compareIndex]}</button>
+          <button className="icon-control" type="button" aria-label="刷新同步" onClick={refresh}>
             <RefreshCcw size={15} />
           </button>
-          <div className="sync-state"><StatusDot tone="success" />数据已更新</div>
-          <button className="icon-control" type="button" aria-label="帮助" onClick={() => onToast("帮助入口：当前为演示模式说明", "info")}>
+          <div className="sync-state"><StatusDot tone={syncLabel === "正在刷新…" ? "info" : "success"} />{syncLabel}</div>
+          <div className="topbar-menu-wrap">
+            <button className="icon-control" type="button" aria-label="帮助" onClick={() => setHelpOpen((open) => !open)}>
             <CircleHelp size={16} />
-          </button>
-          <button className="user-menu" type="button" onClick={() => onToast("王 · Operator，Demo Provider", "info")}>
-            <span>王</span>
-            <ChevronDown size={13} />
-          </button>
+            </button>
+            {helpOpen ? <div className="topbar-menu"><strong>演示模式</strong><span>所有写操作只更新本地 Demo 数据。</span><button type="button" onClick={() => router.push("/settings/connections")}>查看连接</button></div> : null}
+          </div>
+          <div className="topbar-menu-wrap">
+            <button className="user-menu" type="button" onClick={() => setUserOpen((open) => !open)}>
+              <span>王</span>
+              <ChevronDown size={13} />
+            </button>
+            {userOpen ? <div className="topbar-menu user"><strong>王 · Operator</strong><span>Demo Provider</span><button type="button" onClick={() => router.push("/settings/members")}>成员设置</button></div> : null}
+          </div>
         </header>
         <DemoModeBanner />
         <main id="main-content">

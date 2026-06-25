@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DemoMetaAdsProvider } from "@adflow/meta-client";
-import { rowsToCsv } from "@adflow/shared";
+import { effectiveStatusTone, rowsToCsv } from "@adflow/shared";
 
 describe("DemoMetaAdsProvider", () => {
   it("filters entities by name or Meta ID", () => {
@@ -17,11 +17,39 @@ describe("DemoMetaAdsProvider", () => {
     provider.updateStatus("campaign", [row?.id ?? ""], "paused");
     expect(provider.listEntities("campaign", "Summer Glow")[0]?.status).toBe("paused");
   });
+
+  it("updates budgets and duplicates rows in demo data", () => {
+    const provider = new DemoMetaAdsProvider();
+    const [row] = provider.listEntities("campaign", "Summer Glow");
+    provider.updateBudget("campaign", [row?.id ?? ""], 300000);
+    expect(provider.listEntities("campaign", "Summer Glow")[0]?.budget).toBe("₩300,000 / 日");
+
+    const copies = provider.duplicateEntities("campaign", [row?.id ?? ""]);
+    expect(copies).toHaveLength(1);
+    expect(copies[0]?.status).toBe("paused");
+    expect(provider.listEntities("campaign", "副本")).toHaveLength(1);
+  });
+
+  it("adds a visible sync job when manual sync starts", () => {
+    const provider = new DemoMetaAdsProvider();
+    const count = provider.listSyncJobs().length;
+    const job = provider.enqueueSyncJob();
+    expect(provider.listSyncJobs()).toHaveLength(count + 1);
+    expect(provider.listSyncJobs()[0]?.id).toBe(job.id);
+    expect(job.status).toBe("running");
+  });
 });
 
 describe("CSV export", () => {
   it("escapes formula-like cells", () => {
     const csv = rowsToCsv([["name", "value"], ["safe", "=cmd"]]);
     expect(csv).toContain("\"'=cmd\"");
+  });
+});
+
+describe("effectiveStatusTone", () => {
+  it("does not classify 未投放 as active", () => {
+    expect(effectiveStatusTone("未投放")).toBe("paused");
+    expect(effectiveStatusTone("投放中")).toBe("active");
   });
 });

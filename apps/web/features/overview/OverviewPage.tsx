@@ -2,6 +2,7 @@
 
 import { ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import type { DataState } from "@adflow/shared";
 import { demoProvider } from "@adflow/meta-client";
 import type { ToastKind } from "@/lib/app-types";
@@ -17,16 +18,24 @@ export function OverviewPage({
   const router = useRouter();
   const kpis = demoProvider.getKpis();
   const topRows = demoProvider.listEntities("campaign").slice(0, 5);
+  const [snapshotSavedAt, setSnapshotSavedAt] = useState<string | null>(null);
+
+  const saveSnapshot = () => {
+    const savedAt = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+    window.localStorage.setItem("adflow.overviewSnapshot", JSON.stringify({ savedAt, kpiCount: kpis.length, topRows: topRows.length }));
+    setSnapshotSavedAt(savedAt);
+    showToast("快照已保存到本地演示视图", "success");
+  };
 
   return (
     <StateGate state={dataState}>
       <PageHeader
         eyebrow="广告账户 / Seoul Beauty KR"
         title="广告总览"
-        description="2026年6月19日–6月25日 · Asia/Seoul · 报表更新于 6 分钟前"
+        description={`2026年6月19日–6月25日 · Asia/Seoul · ${snapshotSavedAt ? `快照保存于 ${snapshotSavedAt}` : "报表更新于 6 分钟前"}`}
         actions={
           <>
-            <Button onClick={() => showToast("快照已保存到本地演示视图", "success")}>保存快照</Button>
+            <Button onClick={saveSnapshot}>保存快照</Button>
             <Button variant="primary" onClick={() => router.push("/campaigns/new?step=1")}>+ 新建广告</Button>
           </>
         }

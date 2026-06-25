@@ -15,6 +15,6 @@
 ### 验证
 - `pnpm.cmd lint`：通过。
 - `pnpm.cmd typecheck`：通过。
-- `pnpm.cmd test`：通过，3 个单测通过。
+- `pnpm.cmd test`：通过，6 个单测通过。
 - `pnpm.cmd build`：通过。
-- `pnpm.cmd e2e`：通过，截图输出到 `test-results/ui/`。
+- `pnpm.cmd e2e`：通过，使用 `expect(page).toHaveScreenshot()` 对比 `screenshots/` 参考图，并输出 6 张实际截图到 `test-results/ui/`。

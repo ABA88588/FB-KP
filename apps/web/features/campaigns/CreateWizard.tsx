@@ -30,7 +30,17 @@ type Draft = {
   url: string;
   cta: string;
   urlParams: string;
+  assetId: string;
+  previewPlacement: string;
 };
+
+const creativeAssets = [
+  { id: "summer", title: "SUMMER GLOW", file: "summer_glow_hero_01.jpg", meta: "1080 × 1350 · 已在素材库", className: "thumb-1" },
+  { id: "serum", title: "NEW SERUM", file: "new_serum_video_15s.mp4", meta: "1080 × 1920 · 已在素材库", className: "thumb-2" },
+  { id: "bundle", title: "BEAUTY SET", file: "beauty_set_offer.jpg", meta: "1080 × 1350 · 已在素材库", className: "thumb-5" }
+] as const;
+
+const previewPlacements = ["Instagram Feed", "Instagram Story", "Facebook Feed", "Reels"] as const;
 
 const initialDraft: Draft = {
   campaignName: "KR｜Summer Glow｜Sales｜Broad",
@@ -53,7 +63,9 @@ const initialDraft: Draft = {
   description: "SKINCARE SET",
   url: "https://example.com/summer-glow",
   cta: "立即购买",
-  urlParams: "utm_source=meta&utm_campaign=summer_glow"
+  urlParams: "utm_source=meta&utm_campaign=summer_glow",
+  assetId: "summer",
+  previewPlacement: "Instagram Feed"
 };
 
 export function CreateWizard({ showToast }: { showToast: (text: string, kind?: ToastKind) => void }) {
@@ -138,7 +150,7 @@ export function CreateWizard({ showToast }: { showToast: (text: string, kind?: T
           {step === 3 ? <CreativeStep draft={draft} updateDraft={updateDraft} /> : null}
           {step === 4 ? <ReviewStep draft={draft} published={published} /> : null}
         </div>
-        <AdPreview draft={draft} />
+        <AdPreview draft={draft} updateDraft={updateDraft} />
       </div>
 
       <footer className="wizard-footer inline">
@@ -225,6 +237,8 @@ function AdSetStep({ draft, updateDraft }: { draft: Draft; updateDraft: (patch: 
 }
 
 function CreativeStep({ draft, updateDraft }: { draft: Draft; updateDraft: (patch: Partial<Draft>) => void }) {
+  const [assetOpen, setAssetOpen] = useState(false);
+  const asset = creativeAssets.find((item) => item.id === draft.assetId) ?? creativeAssets[0];
   return (
     <section className="wizard-pane active">
       <div className="form-card">
@@ -234,11 +248,23 @@ function CreativeStep({ draft, updateDraft }: { draft: Draft; updateDraft: (patc
           <label>Instagram 账号<input value={draft.instagram} onChange={(event) => updateDraft({ instagram: event.target.value })} /></label>
         </div>
         <label>单图或视频<select value={draft.format} onChange={(event) => updateDraft({ format: event.target.value })}><option>单图或视频</option><option>视频</option></select></label>
-        <button className="asset-picker" type="button">
-          <span className="asset-preview">SUMMER<br />GLOW</span>
-          <span><strong>summer_glow_hero_01.jpg</strong><small>1080 × 1350 · 已在素材库</small></span>
-          <em>更换</em>
-        </button>
+        <div className="asset-picker-wrap">
+          <button className="asset-picker" type="button" onClick={() => setAssetOpen((open) => !open)}>
+            <span className={`asset-preview ${asset.className}`}>{asset.title}</span>
+            <span><strong>{asset.file}</strong><small>{asset.meta}</small></span>
+            <em>更换</em>
+          </button>
+          {assetOpen ? (
+            <div className="asset-menu">
+              {creativeAssets.map((item) => (
+                <button key={item.id} type="button" className={draft.assetId === item.id ? "active" : ""} onClick={() => { updateDraft({ assetId: item.id }); setAssetOpen(false); }}>
+                  <span className={`asset-preview ${item.className}`}>{item.title}</span>
+                  <strong>{item.file}</strong>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
       <div className="form-card">
         <h2>文案与链接</h2>
@@ -267,7 +293,7 @@ function ReviewStep({ draft, published }: { draft: Draft; published: boolean }) 
       </div>
       <ReviewCard title="Campaign" rows={[["名称", draft.campaignName], ["目标", draft.objective], ["特殊广告类别", draft.specialCategory], ["状态", "PAUSED"]]} />
       <ReviewCard title="Ad Set" rows={[["转化位置", draft.conversionLocation], ["优化事件", draft.event], ["日预算", `₩${Number(draft.budget).toLocaleString("en-US")}`], ["受众", `${draft.audience} · ${draft.placement}`], ["归因窗口", draft.attribution]]} />
-      <ReviewCard title="Ad" rows={[["Facebook Page", draft.page], ["Instagram", draft.instagram], ["标题", draft.title], ["网站 URL", draft.url], ["CTA", draft.cta]]} />
+      <ReviewCard title="Ad" rows={[["Facebook Page", draft.page], ["Instagram", draft.instagram], ["素材", creativeAssets.find((item) => item.id === draft.assetId)?.file ?? "—"], ["标题", draft.title], ["网站 URL", draft.url], ["CTA", draft.cta]]} />
       <ReviewCard title="发布前检查" rows={[["将创建对象", "4 个"], ["默认状态", "PAUSED"], ["权限是否完整", "演示权限完整"], ["阻塞错误", "无"], ["数据模式", "Demo Provider，不会写入 Meta"]]} />
     </section>
   );
@@ -284,20 +310,26 @@ function ReviewCard({ title, rows }: { title: string; rows: Array<[string, strin
   );
 }
 
-function AdPreview({ draft }: { draft: Draft }) {
+function AdPreview({ draft, updateDraft }: { draft: Draft; updateDraft: (patch: Partial<Draft>) => void }) {
+  const asset = creativeAssets.find((item) => item.id === draft.assetId) ?? creativeAssets[0];
+  const placementIndex = previewPlacements.findIndex((item) => item === draft.previewPlacement);
+  const nextPlacement = () => {
+    const next = previewPlacements[(placementIndex + 1) % previewPlacements.length] ?? previewPlacements[0];
+    updateDraft({ previewPlacement: next });
+  };
   return (
     <aside className="wizard-preview">
       <div className="preview-heading">
-        <div><strong>广告预览</strong><span>Instagram Feed</span></div>
-        <button type="button">切换版位</button>
+        <div><strong>广告预览</strong><span>{draft.previewPlacement}</span></div>
+        <button type="button" onClick={nextPlacement}>切换版位</button>
       </div>
-      <div className="phone-preview">
+      <div className={`phone-preview ${draft.previewPlacement.toLowerCase().replaceAll(" ", "-")}`}>
         <div className="social-head">
           <span className="profile-dot">S</span>
           <div><strong>seoulbeauty.kr</strong><small>赞助内容</small></div>
           <em>⋯</em>
         </div>
-        <div className="preview-image">SUMMER<br /><strong>GLOW</strong><small>{draft.description}</small></div>
+        <div className={`preview-image ${asset.className}`}>{asset.title}<small>{draft.description}</small></div>
         <div className="social-copy">
           <div className="social-icons">♡ ○ ↗</div>
           <p><strong>seoulbeauty.kr</strong> {draft.primaryText}</p>
