@@ -13,6 +13,7 @@ import { Button, ConfirmDialog, PageHeader, StateGate, StatusBadge } from "@/com
 import { DetailDrawer } from "./DetailDrawer";
 
 type ColumnId = "budget" | "spend" | "purchases" | "cpa" | "value" | "roas" | "impressions" | "ctr" | "cpc" | "updated";
+type Currency = "KRW" | "USD";
 
 const columnLabels: Record<ColumnId, string> = {
   budget: "预算",
@@ -49,7 +50,7 @@ export function CampaignManager({
   const [level, setLevel] = useState<EntityLevel>("campaign");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "paused">("active");
-  const [minSpend, setMinSpend] = useState("100000");
+  const [minSpend, setMinSpend] = useState(defaultMinSpend(account.currency));
   const [warningOnly, setWarningOnly] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [visibleColumns, setVisibleColumns] = useState<ColumnId[]>(defaultColumns);
@@ -72,7 +73,7 @@ export function CampaignManager({
     const requestedQuery = params.get("q");
     const requestedStatus = params.get("status");
     const requestedMin = params.get("minSpend");
-    const savedView = loadSavedView();
+    const savedView = loadSavedView(account.id);
     if (requested === "adset" || requested === "ad" || requested === "campaign") {
       setLevel(requested);
     } else if (savedView?.level) {
@@ -90,13 +91,14 @@ export function CampaignManager({
     if (requestedQuery) setQuery(requestedQuery);
     if (requestedStatus === "all" || requestedStatus === "active" || requestedStatus === "paused") setStatusFilter(requestedStatus);
     if (requestedMin !== null) setMinSpend(requestedMin);
+    else if (!savedView) setMinSpend(defaultMinSpend(account.currency));
     if (savedView) return;
-    const savedColumns = window.localStorage.getItem("adflow.savedColumns");
+    const savedColumns = window.localStorage.getItem(savedColumnsKey(account.id));
     if (savedColumns) {
       const parsed = savedColumns.split(",").filter((item): item is ColumnId => item in columnLabels);
       if (parsed.length > 0) setVisibleColumns(parsed);
     }
-  }, []);
+  }, [account.currency, account.id]);
 
   const rows = useMemo(() => {
     const minSpendValue = Number(minSpend || 0);
@@ -115,6 +117,11 @@ export function CampaignManager({
   const selectedCount = selectedIds.size;
   const allPageSelected = pageRows.length > 0 && pageRows.every((row) => selectedIds.has(row.id));
   const activeFilterCount = [statusFilter !== "all", Number(minSpend || 0) > 0, warningOnly].filter(Boolean).length;
+  const levelCounts = useMemo(() => ({
+    campaign: demoProvider.listEntities("campaign", account.id, "", queryContext).length,
+    adset: demoProvider.listEntities("adset", account.id, "", queryContext).length,
+    ad: demoProvider.listEntities("ad", account.id, "", queryContext).length
+  }), [account.id, dataVersion, queryContext, revision]);
 
   useEffect(() => {
     if (pageIndex > totalPages) setPageIndex(totalPages);
@@ -153,7 +160,7 @@ export function CampaignManager({
 
   const openBudgetDialog = (ids: string[]) => {
     const first = rows.find((row) => ids.includes(row.id));
-    const current = first ? parseMoney(first.budget) || 100000 : 100000;
+    const current = first ? parseMoney(first.budget) || defaultBudget(account.currency) : defaultBudget(account.currency);
     setBudgetDialog({ ids, amount: String(current) });
     setBulkMoreOpen(false);
     setRowMenuId(null);
@@ -205,7 +212,7 @@ export function CampaignManager({
 
   const saveView = () => {
     const savedAt = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
-    window.localStorage.setItem("adflow.campaignView", JSON.stringify({
+    window.localStorage.setItem(campaignViewKey(account.id), JSON.stringify({
       level,
       query,
       statusFilter,
@@ -215,13 +222,13 @@ export function CampaignManager({
       visibleColumns,
       savedAt
     }));
-    window.localStorage.setItem("adflow.savedColumns", visibleColumns.join(","));
+    window.localStorage.setItem(savedColumnsKey(account.id), visibleColumns.join(","));
     setViewSavedAt(savedAt);
     showToast("当前层级、筛选、排序和列配置已保存", "success");
   };
 
   const restoreSavedView = () => {
-    const savedView = loadSavedView();
+    const savedView = loadSavedView(account.id);
     if (!savedView) {
       showToast("暂无已保存视图", "warning");
       return;
@@ -302,9 +309,9 @@ export function CampaignManager({
       />
 
       <div className="entity-tabs" role="tablist">
-        <LevelTab active={level === "campaign"} label="广告系列" count="12" onClick={() => changeLevel("campaign")} />
-        <LevelTab active={level === "adset"} label="广告组" count="28" onClick={() => changeLevel("adset")} />
-        <LevelTab active={level === "ad"} label="广告" count="42" onClick={() => changeLevel("ad")} />
+        <LevelTab active={level === "campaign"} label="广告系列" count={String(levelCounts.campaign)} onClick={() => changeLevel("campaign")} />
+        <LevelTab active={level === "adset"} label="广告组" count={String(levelCounts.adset)} onClick={() => changeLevel("adset")} />
+        <LevelTab active={level === "ad"} label="广告" count={String(levelCounts.ad)} onClick={() => changeLevel("ad")} />
       </div>
 
       <section className="table-panel">
@@ -317,7 +324,7 @@ export function CampaignManager({
             <Button size="compact" onClick={() => setFilterOpen((open) => !open)}><Filter size={14} /> 筛选 <span className="filter-count">{activeFilterCount}</span></Button>
             {filterOpen ? (
               <div className="filter-popover">
-                <label>最低花费<input value={minSpend} inputMode="numeric" onChange={(event) => { setMinSpend(event.target.value.replace(/\D/g, "")); setPageIndex(1); }} placeholder="100000" /></label>
+                <label>最低花费 ({currencySymbol(account.currency)})<input value={minSpend} inputMode="numeric" onChange={(event) => { setMinSpend(event.target.value.replace(/\D/g, "")); setPageIndex(1); }} placeholder={defaultMinSpend(account.currency)} /></label>
                 <label className="check-row"><input checked={warningOnly} type="checkbox" onChange={(event) => { setWarningOnly(event.target.checked); setPageIndex(1); }} />只看待检查</label>
                 <div className="popover-actions">
                   <Button size="compact" onClick={() => setFilterOpen(false)}>应用</Button>
@@ -366,7 +373,7 @@ export function CampaignManager({
         <div className="filter-chips">
           {query ? <span className="filter-chip">搜索 = {query} <button type="button" onClick={() => setQuery("")}>×</button></span> : null}
           {statusFilter !== "all" ? <span className="filter-chip">有效状态 = {statusFilter === "active" ? "投放中" : "已暂停"} <button type="button" onClick={() => setStatusFilter("all")}>×</button></span> : null}
-          {Number(minSpend || 0) > 0 ? <span className="filter-chip">花费 ≥ ₩{Number(minSpend).toLocaleString("en-US")} <button type="button" onClick={() => setMinSpend("")}>×</button></span> : null}
+          {Number(minSpend || 0) > 0 ? <span className="filter-chip">花费 ≥ {formatAmount(Number(minSpend), account.currency)} <button type="button" onClick={() => setMinSpend("")}>×</button></span> : null}
           {warningOnly ? <span className="filter-chip">只看待检查 <button type="button" onClick={() => setWarningOnly(false)}>×</button></span> : null}
           {!query && statusFilter === "all" && !Number(minSpend || 0) && !warningOnly ? <span className="filter-chip muted">当前无筛选条件</span> : null}
           <button className="clear-filters" type="button" onClick={clearFilters}>清除全部</button>
@@ -478,11 +485,12 @@ export function CampaignManager({
         </div>
       </section>
 
-      <DetailDrawer entity={drawerEntity} level={level} readOnly={dataState === "permission-denied" || dataState === "connection-expired"} onClose={() => setDrawerEntity(null)} onSave={saveEntity} onToast={(message) => showToast(message, "info")} />
+      <DetailDrawer entity={drawerEntity} level={level} currency={account.currency} readOnly={dataState === "permission-denied" || dataState === "connection-expired"} onClose={() => setDrawerEntity(null)} onSave={saveEntity} onToast={(message) => showToast(message, "info")} />
       <BudgetDialog
         open={Boolean(budgetDialog)}
         amount={budgetDialog?.amount ?? ""}
         count={budgetDialog?.ids.length ?? 0}
+        currency={account.currency}
         onAmountChange={(amount) => setBudgetDialog((current) => current ? { ...current, amount } : current)}
         onClose={() => setBudgetDialog(null)}
         onConfirm={applyBudget}
@@ -510,8 +518,8 @@ type SavedCampaignView = {
   savedAt: string;
 };
 
-function loadSavedView(): SavedCampaignView | null {
-  const raw = window.localStorage.getItem("adflow.campaignView");
+function loadSavedView(accountId: string): SavedCampaignView | null {
+  const raw = window.localStorage.getItem(campaignViewKey(accountId));
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as Partial<SavedCampaignView>;
@@ -532,7 +540,7 @@ function loadSavedView(): SavedCampaignView | null {
       savedAt: parsed.savedAt ?? "已保存"
     };
   } catch {
-    window.localStorage.removeItem("adflow.campaignView");
+    window.localStorage.removeItem(campaignViewKey(accountId));
     return null;
   }
 }
@@ -541,6 +549,7 @@ function BudgetDialog({
   open,
   amount,
   count,
+  currency,
   onAmountChange,
   onClose,
   onConfirm
@@ -548,6 +557,7 @@ function BudgetDialog({
   open: boolean;
   amount: string;
   count: number;
+  currency: Currency;
   onAmountChange: (amount: string) => void;
   onClose: () => void;
   onConfirm: () => void;
@@ -558,7 +568,7 @@ function BudgetDialog({
       <section className="confirm-dialog budget-dialog" role="dialog" aria-modal="true" aria-label="修改预算" onClick={(event) => event.stopPropagation()}>
         <h2>修改预算</h2>
         <p>将更新 {count} 个对象的本地 Demo 日预算，不会写入 Meta。</p>
-        <label>日预算 KRW<input value={amount} inputMode="numeric" onChange={(event) => onAmountChange(event.target.value.replace(/\D/g, ""))} /></label>
+        <label>日预算 {currency} ({currencySymbol(currency)})<input value={amount} inputMode="numeric" onChange={(event) => onAmountChange(event.target.value.replace(/\D/g, ""))} /></label>
         <div className="dialog-actions">
           <Button onClick={onClose}>取消</Button>
           <Button variant="primary" onClick={onConfirm}>保存预算</Button>
@@ -579,6 +589,30 @@ function LevelTab({ active, label, count, onClick }: { active: boolean; label: s
 function parseMoney(value: string): number {
   const numeric = value.replace(/[^\d.-]/g, "");
   return Number(numeric || 0);
+}
+
+function campaignViewKey(accountId: string): string {
+  return `adflow.campaignView.${accountId}`;
+}
+
+function savedColumnsKey(accountId: string): string {
+  return `adflow.savedColumns.${accountId}`;
+}
+
+function currencySymbol(currency: Currency): string {
+  return currency === "USD" ? "$" : "₩";
+}
+
+function defaultMinSpend(currency: Currency): string {
+  return currency === "USD" ? "80" : "100000";
+}
+
+function defaultBudget(currency: Currency): number {
+  return currency === "USD" ? 120 : 100000;
+}
+
+function formatAmount(value: number, currency: Currency): string {
+  return `${currencySymbol(currency)}${Math.round(value).toLocaleString("en-US")}`;
 }
 
 function numericColumn(column: ColumnId): boolean {

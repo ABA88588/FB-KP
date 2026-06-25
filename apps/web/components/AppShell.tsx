@@ -2,15 +2,16 @@
 
 import { ChevronDown, CircleHelp, FileBarChart, Grid3X3, Image, LayoutDashboard, RefreshCcw, Settings, SlidersHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { cn } from "@adflow/shared";
+import { demoProvider } from "@adflow/meta-client";
 import type { PageKey } from "@/lib/app-types";
 import { useDemoContext } from "@/lib/demo-context";
 import { DemoModeBanner, StatusDot } from "./ui";
 
 const navItems: Array<{ page: PageKey; label: string; href: string; icon: ReactNode; count?: string; danger?: boolean }> = [
   { page: "overview", label: "总览", href: "/overview", icon: <LayoutDashboard size={16} /> },
-  { page: "campaigns", label: "广告管理", href: "/campaigns?level=campaign", icon: <Grid3X3 size={16} />, count: "42" },
+  { page: "campaigns", label: "广告管理", href: "/campaigns?level=campaign", icon: <Grid3X3 size={16} /> },
   { page: "creatives", label: "素材中心", href: "/creatives", icon: <Image size={16} /> },
   { page: "reports", label: "自定义报表", href: "/reports", icon: <FileBarChart size={16} /> },
   { page: "sync-center", label: "同步与错误", href: "/sync-center", icon: <RefreshCcw size={16} />, danger: true },
@@ -33,12 +34,16 @@ export function AppShell({
 }) {
   const router = useRouter();
   const activePage: PageKey = page === "campaigns-new" ? "campaigns" : page;
-  const { account, dateRange, compareRange, cycleAccount: cycleContextAccount, cycleDateRange, cycleCompareRange, touchDemoData } = useDemoContext();
+  const { account, dateRange, compareRange, queryContext, revision, cycleAccount: cycleContextAccount, cycleDateRange, cycleCompareRange, touchDemoData } = useDemoContext();
   const [workspaceIndex, setWorkspaceIndex] = useState(0);
   const [syncLabel, setSyncLabel] = useState("数据已更新");
   const [helpOpen, setHelpOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const workspace = workspaces[workspaceIndex] ?? workspaces[0];
+  const campaignCount = useMemo(
+    () => demoProvider.listEntities("campaign", account.id, "", queryContext).length,
+    [account.id, queryContext, revision]
+  );
 
   const cycleWorkspace = () => {
     setWorkspaceIndex((current) => {
@@ -96,7 +101,7 @@ export function AppShell({
             >
               <span className="nav-icon">{item.icon}</span>
               <span>{item.label}</span>
-              {item.count ? <span className="nav-count">{item.count}</span> : null}
+              {item.page === "campaigns" ? <span className="nav-count">{campaignCount}</span> : item.count ? <span className="nav-count">{item.count}</span> : null}
               {item.danger ? <span className="dot danger" /> : null}
             </button>
           ))}

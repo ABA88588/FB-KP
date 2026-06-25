@@ -138,6 +138,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .metric-delta span { color: var(--muted); font-weight: 400; }
 .metric-delta.up { color: var(--success); }
 .metric-delta.down { color: var(--danger); }
+.metric-delta.neutral { color: var(--muted); }
 .overview-grid { display: grid; grid-template-columns: minmax(0, 2.05fr) minmax(280px, 0.95fr); gap: 14px; margin-bottom: 14px; }
 .panel-header { display: flex; min-height: 62px; align-items: flex-start; gap: 12px; padding: 14px 16px 10px; }
 .panel-header h2 { margin: 0 0 2px; font-size: 14px; }
@@ -419,6 +420,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .option-grid button.active { color: var(--primary); background: var(--selected); border-color: #bfdbfe; }
 .compatibility { padding: 7px; margin-top: 8px; font-size: 9.5px; border-radius: 7px; }
 .compatibility.ok { color: var(--success); background: var(--success-soft); }
+.report-inline-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.report-inline-fields label { min-width: 0; margin-bottom: 0; }
+.report-inline-fields select { padding: 0 7px; font-size: 10px; }
 .query-estimate { padding: 10px; margin: 14px 0; background: var(--selected); border: 1px solid #bfdbfe; border-radius: 8px; }
 .query-estimate span, .query-estimate strong, .query-estimate small { display: block; }
 .query-estimate span { color: var(--muted); font-size: 9.5px; }

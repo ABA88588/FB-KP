@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 const baselineHashes: Record<string, string> = {
   "00-ui-contact-sheet.png": "B25733257512D673E6F28B549DE3D8475C5AE72224C5E632FA20D0B30D3233E7",
@@ -96,6 +96,22 @@ test.describe("demo data flows", () => {
     await expect(page.getByTestId("campaign-row").first()).toContainText("$");
   });
 
+  test("USD account budget entry points use dollars", async ({ page }) => {
+    await page.goto("/campaigns?level=campaign");
+    await switchToUsd(page);
+
+    await expect(page.locator(".filter-chips")).toContainText("$80");
+    const firstRow = page.getByTestId("campaign-row").first();
+    await firstRow.locator('input[type="checkbox"]').check();
+    await page.locator(".bulk-bar button").nth(2).click();
+    await expect(page.locator(".budget-dialog")).toContainText("USD ($)");
+    await page.locator(".budget-dialog .button").first().click();
+
+    await firstRow.click();
+    await page.locator(".drawer-footer .button.primary").click();
+    await expect(page.locator(".drawer-edit-form")).toContainText("USD ($)");
+  });
+
   test("detail drawer edit syncs back to the table", async ({ page }) => {
     await page.goto("/campaigns?level=campaign&status=all&minSpend=0");
     const firstRow = page.getByTestId("campaign-row").first();
@@ -115,6 +131,30 @@ test.describe("demo data flows", () => {
 
     await expect(page).toHaveURL(/\/campaigns\?level=campaign/);
     await expect(page.getByTestId("campaign-row").first()).toContainText("Summer Glow");
+  });
+
+  test("simulated publish increases campaign tab count", async ({ page }) => {
+    await page.goto("/campaigns?level=campaign&status=all&minSpend=0");
+    const before = await entityTabCount(page, "广告系列");
+
+    await page.goto("/campaigns/new?step=4");
+    await page.locator(".wizard-footer .button.primary").click();
+
+    await expect(page).toHaveURL(/\/campaigns\?level=campaign/);
+    await expect.poll(() => entityTabCount(page, "广告系列")).toBe(before + 1);
+  });
+
+  test("USD create flow does not show KRW or Seoul identity", async ({ page }) => {
+    await page.goto("/overview");
+    await switchToUsd(page);
+    await page.goto("/campaigns/new?step=4");
+
+    const wizard = page.locator(".wizard-screen");
+    await expect(wizard).toContainText("$120");
+    await expect(wizard).toContainText("glowusdtc.com");
+    await expect(wizard).not.toContainText("₩");
+    await expect(wizard).not.toContainText("seoulbeauty.kr");
+    await expect(wizard).not.toContainText("韩国");
   });
 
   test("new creative appears in creative center after simulated publish", async ({ page }) => {
@@ -144,6 +184,46 @@ test.describe("demo data flows", () => {
     await expect(firstRow).not.toHaveText(before);
   });
 
+  test("USD report preset keeps dollar currency", async ({ page }) => {
+    await page.goto("/overview");
+    await switchToUsd(page);
+    await page.goto("/reports");
+
+    await page.locator(".report-side button", { hasText: "Campaign ROAS 监控" }).click();
+    await page.locator(".report-builder .button.primary.full").click();
+
+    await expect(page.getByTestId("report-note")).toContainText("Glow US DTC", { timeout: 3_000 });
+    await expect(page.getByTestId("report-row").first()).toContainText("$");
+    await expect(page.getByTestId("report-row").first()).not.toContainText("₩");
+  });
+
+  test("report without breakdown returns a single summary group", async ({ page }) => {
+    await page.goto("/reports");
+    const breakdownSection = page.locator(".builder-section").filter({ hasText: "Breakdown" });
+    await breakdownSection.locator(".token-list button").first().click();
+    await page.locator(".report-builder .button.primary.full").click();
+
+    await expect(page.getByTestId("report-note")).toContainText("行", { timeout: 3_000 });
+    await expect(page.getByTestId("report-row").first()).toContainText("全部");
+    const visibleRows = await page.getByTestId("report-row").allInnerTexts();
+    expect(visibleRows.every((row) => row.includes("全部"))).toBe(true);
+    expect(visibleRows.join(" ")).not.toContain("Facebook");
+    expect(visibleRows.join(" ")).not.toContain("Instagram");
+  });
+
+  test("no-compare KPI has no trend arrow", async ({ page }) => {
+    await page.goto("/overview");
+    const compareButton = page.locator(".top-control").filter({ hasText: "对比：" });
+    await compareButton.click();
+    await compareButton.click();
+
+    const firstDelta = page.getByTestId("kpi-card").first().locator(".metric-delta");
+    await expect(compareButton).toContainText("不对比");
+    await expect(firstDelta).toContainText("—");
+    await expect(firstDelta.locator("svg")).toHaveCount(0);
+    await expect(firstDelta).not.toHaveClass(/up|down/);
+  });
+
   test("new sync task progresses from running to success", async ({ page }) => {
     await page.goto("/sync-center");
     await page.locator(".page-actions .button.primary").click();
@@ -153,6 +233,19 @@ test.describe("demo data flows", () => {
     await expect(newestJob).toContainText("成功", { timeout: 3_000 });
   });
 });
+
+async function switchToUsd(page: Page) {
+  const picker = page.getByTestId("account-picker");
+  if (!(await picker.innerText()).includes("Glow US DTC")) {
+    await picker.click();
+  }
+  await expect(picker).toContainText("Glow US DTC");
+}
+
+async function entityTabCount(page: Page, label: string): Promise<number> {
+  const text = await page.locator(".entity-tab", { hasText: label }).innerText();
+  return Number(text.match(/\d+/)?.[0] ?? 0);
+}
 
 test.describe("design baselines", () => {
   for (const [fileName, expectedHash] of Object.entries(baselineHashes)) {

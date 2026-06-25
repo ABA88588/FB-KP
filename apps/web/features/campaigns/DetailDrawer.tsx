@@ -6,10 +6,12 @@ import type { CampaignEntity, EntityLevel } from "@adflow/meta-client";
 import { Button, StatusBadge, TrendChart } from "@/components/ui";
 
 const tabs = ["概览", "设置", "趋势", "活动"] as const;
+type Currency = "KRW" | "USD";
 
 export function DetailDrawer({
   entity,
   level,
+  currency,
   readOnly,
   onClose,
   onSave,
@@ -17,6 +19,7 @@ export function DetailDrawer({
 }: {
   entity: CampaignEntity | null;
   level: EntityLevel;
+  currency: Currency;
   readOnly: boolean;
   onClose: () => void;
   onSave: (id: string, input: { name: string; status: "active" | "paused"; budget: string }) => CampaignEntity | null;
@@ -98,7 +101,7 @@ export function DetailDrawer({
             </div>
             <div className="drawer-content">
               {tab === "概览" ? <OverviewTab entity={entity} /> : null}
-              {tab === "设置" ? <SettingsTab entity={entity} editMode={editMode} form={editForm} setForm={setEditForm} onSave={saveEdit} onCancel={cancelEdit} /> : null}
+              {tab === "设置" ? <SettingsTab entity={entity} currency={currency} editMode={editMode} form={editForm} setForm={setEditForm} onSave={saveEdit} onCancel={cancelEdit} /> : null}
               {tab === "趋势" ? <TrendTab /> : null}
               {tab === "活动" ? <ActivityTab /> : null}
             </div>
@@ -163,6 +166,7 @@ function OverviewTab({ entity }: { entity: CampaignEntity }) {
 
 function SettingsTab({
   entity,
+  currency,
   editMode,
   form,
   setForm,
@@ -170,6 +174,7 @@ function SettingsTab({
   onCancel
 }: {
   entity: CampaignEntity;
+  currency: Currency;
   editMode: boolean;
   form: { name: string; status: "active" | "paused"; budget: string };
   setForm: (form: { name: string; status: "active" | "paused"; budget: string }) => void;
@@ -183,7 +188,7 @@ function SettingsTab({
         <div className="drawer-edit-form">
           <label>名称<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
           <label>状态<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as "active" | "paused" })}><option value="active">ACTIVE</option><option value="paused">PAUSED</option></select></label>
-          <label>日预算 KRW<input value={form.budget} inputMode="numeric" onChange={(event) => setForm({ ...form, budget: event.target.value.replace(/\D/g, "") })} /></label>
+          <label>日预算 {currency} ({currencySymbol(currency)})<input value={form.budget} inputMode="numeric" onChange={(event) => setForm({ ...form, budget: event.target.value.replace(/\D/g, "") })} /></label>
           <div><Button onClick={onCancel}>取消</Button><Button variant="primary" onClick={onSave}>保存设置</Button></div>
         </div>
       ) : null}
@@ -195,6 +200,10 @@ function SettingsTab({
       <div className="setting-row"><span>数据来源</span><strong>Demo Provider</strong></div>
     </section>
   );
+}
+
+function currencySymbol(currency: Currency): string {
+  return currency === "USD" ? "$" : "₩";
 }
 
 function TrendTab() {

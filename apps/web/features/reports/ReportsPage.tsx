@@ -91,7 +91,7 @@ export function ReportsPage({
   const runtime = useAppRuntime();
   const dataState = providedDataState ?? runtime.dataState;
   const showToast = providedShowToast ?? runtime.showToast;
-  const { account, accountLabel, dateRange, compareRange, revision } = useDemoContext();
+  const { account, accountLabel, dateRange, compareRange } = useDemoContext();
   const [config, setConfig] = useState<ReportConfig>(baseConfig);
   const [presets, setPresets] = useState<Preset[]>(initialPresets);
   const [presetPanelOpen, setPresetPanelOpen] = useState(true);
@@ -110,12 +110,11 @@ export function ReportsPage({
 
   useEffect(() => {
     setConfig((current) => {
-      const keepBaselineDate = revision === 0 && account.name === "Seoul Beauty KR" && dateRange === "近 7 天" && compareRange === "上一周期";
-      const next = { ...current, account: account.name, currency: account.currency, dateRange: keepBaselineDate ? current.dateRange : dateRange, compareRange };
+      const next = { ...current, account: account.name, currency: account.currency, dateRange, compareRange };
       if (
-        keepBaselineDate &&
         current.account === next.account &&
         current.currency === next.currency &&
+        current.dateRange === next.dateRange &&
         current.compareRange === next.compareRange
       ) {
         return current;
@@ -126,7 +125,7 @@ export function ReportsPage({
       setNote(`${next.account} · ${next.dateRange} · ${next.compareRange} · ${estimateSize(next)}`);
       return next;
     });
-  }, [account.currency, account.name, compareRange, dateRange, revision]);
+  }, [account.currency, account.name, compareRange, dateRange]);
 
   const updateConfig = (patch: Partial<ReportConfig>) => {
     setConfig((current) => ({ ...current, ...patch }));
@@ -189,7 +188,13 @@ export function ReportsPage({
   };
 
   const applyPreset = (preset: Preset) => {
-    setConfig(preset.config);
+    setConfig((current) => ({
+      ...preset.config,
+      account: current.account,
+      currency: current.currency,
+      dateRange: current.dateRange,
+      compareRange: current.compareRange
+    }));
     setSelectedPreset(preset.name);
     setStage("已应用预设，等待运行");
     setNote(`当前配置来自：${preset.name}`);
@@ -266,7 +271,10 @@ export function ReportsPage({
             ) : null}
             <div className="compatibility ok">✓ 当前组合受支持</div>
           </div>
-          <label>归因窗口<select value={config.attribution} onChange={(event) => updateConfig({ attribution: event.target.value as ReportConfig["attribution"] })}><option>使用账户归因设置</option><option>7-day click</option><option>1-day click</option></select></label>
+          <div className="report-inline-fields">
+            <label>筛选条件<select value={config.filter} onChange={(event) => updateConfig({ filter: event.target.value as ReportConfig["filter"] })}><option>有效广告</option><option>ROAS 小于 1.5</option><option>花费大于 100000</option></select></label>
+            <label>归因窗口<select value={config.attribution} onChange={(event) => updateConfig({ attribution: event.target.value as ReportConfig["attribution"] })}><option>使用账户归因设置</option><option>7-day click</option><option>1-day click</option></select></label>
+          </div>
           <div className="query-estimate"><span>预计规模</span><strong>{estimateSize(config)}</strong><small>将使用异步报表任务</small></div>
           <Button variant="primary" className="full" onClick={runReport}><Play size={14} /> 运行报表</Button>
         </aside>
@@ -286,7 +294,11 @@ export function ReportsPage({
           </div>
           <div className={`report-chart ${config.chartType}`}>
             {config.chartType === "line" ? <LineChart rows={rows} metric={chartMetric} /> : <BarChart rows={rows} metric={chartMetric} />}
-            <div className="legend"><span><i className="legend-line value" />{rows[0]?.breakdown ?? "结果 A"}</span><span><i className="legend-line spend" />{rows[1]?.breakdown ?? "结果 B"}</span></div>
+            <div className="legend">
+              {[...new Set(rows.map((row) => row.breakdown))].slice(0, 2).map((group, index) => (
+                <span key={group}><i className={`legend-line ${index === 0 ? "value" : "spend"}`} />{group}</span>
+              ))}
+            </div>
           </div>
           <div className="report-table">
             <div className="report-row head" style={{ gridTemplateColumns: rowTemplate }}>
@@ -361,6 +373,7 @@ function breakdownGroups(breakdowns: BreakdownKey[]): string[] {
     device_platform: ["Mobile", "Desktop"],
     country: ["KR", "US"]
   };
+  if (breakdowns.length === 0) return ["全部"];
   const active = breakdowns.length > 0 ? breakdowns : ["publisher_platform" as const];
   return active.reduce<string[]>((groups, breakdown) => groups.flatMap((group) => values[breakdown].map((value) => group ? `${group} / ${value}` : value)), [""]);
 }
@@ -371,7 +384,7 @@ function formatReportMoney(value: number, currency: ReportConfig["currency"]): s
 
 function estimateSize(config: ReportConfig): string {
   const days = config.dateRange === "近 7 天" ? 7 : config.dateRange === "近 14 天" ? 14 : 30;
-  const size = days * Math.max(1, config.metrics.length) * Math.max(1, config.breakdowns.length);
+  const size = days * Math.max(1, config.metrics.length) * breakdownGroups(config.breakdowns).length;
   if (size > 240) return "较大 · 约 1,200 行";
   if (size > 80) return "中等 · 约 640 行";
   return "较小 · 约 180 行";

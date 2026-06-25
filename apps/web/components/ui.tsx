@@ -72,14 +72,15 @@ export function PageHeader({
 }
 
 export function KpiCard({ metric }: { metric: KpiMetric }) {
+  const hasComparison = metric.delta !== "—";
   return (
     <article className={cn("metric-card", metric.accent && "accent")} data-testid="kpi-card">
       <div className="metric-label">
         {metric.label} <Info size={13} aria-hidden="true" />
       </div>
       <div className="metric-value">{metric.value || "—"}</div>
-      <div className={cn("metric-delta", metric.direction)}>
-        {metric.direction === "up" ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
+      <div className={cn("metric-delta", hasComparison ? metric.direction : "neutral")}>
+        {hasComparison ? (metric.direction === "up" ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />) : null}
         {metric.delta} <span>{metric.note}</span>
       </div>
     </article>
