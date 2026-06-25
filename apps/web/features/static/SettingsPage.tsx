@@ -3,10 +3,13 @@
 import { useState } from "react";
 import type { ToastKind } from "@/lib/app-types";
 import { Button, PageHeader } from "@/components/ui";
+import { useAppRuntime } from "@/lib/app-runtime";
 
 const settingsTabs = ["Meta 连接", "广告账户", "成员与角色", "指标设置", "安全与审计"] as const;
 
-export function SettingsPage({ showToast }: { showToast: (text: string, kind?: ToastKind) => void }) {
+export function SettingsPage({ showToast: providedShowToast }: { showToast?: (text: string, kind?: ToastKind) => void } = {}) {
+  const runtime = useAppRuntime();
+  const showToast = providedShowToast ?? runtime.showToast;
   const [tab, setTab] = useState<(typeof settingsTabs)[number]>("Meta 连接");
   const [status, setStatus] = useState<"健康" | "已断开">("健康");
   const [lastChecked, setLastChecked] = useState("刚刚");

@@ -1,5 +1,5 @@
-import { AdFlowApp } from "@/components/AdFlowApp";
+import { SettingsPage } from "@/features/static/SettingsPage";
 
 export default function SettingsMembersPage() {
-  return <AdFlowApp page="settings" />;
+  return <SettingsPage />;
 }

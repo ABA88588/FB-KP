@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { demoProvider, type AdAccount, type DemoQueryContext } from "@adflow/meta-client";
 
 export const dateRanges = ["近 7 天", "近 14 天", "近 30 天"] as const;
@@ -8,6 +8,12 @@ export const compareRanges = ["上一周期", "去年同期", "不对比"] as co
 
 export type DateRange = (typeof dateRanges)[number];
 export type CompareRange = (typeof compareRanges)[number];
+
+type PersistedDemoState = {
+  accountId?: string;
+  dateRange?: DateRange;
+  compareRange?: CompareRange;
+};
 
 type DemoContextValue = {
   accounts: AdAccount[];
@@ -24,13 +30,15 @@ type DemoContextValue = {
   cycleCompareRange: () => CompareRange;
   setAccountByName: (name: string) => void;
   setDateRange: (range: DateRange) => void;
+  setCompareRange: (range: CompareRange) => void;
   touchDemoData: () => void;
 };
 
+const storageKey = "adflow.demoContext";
 const fallbackAccount: AdAccount = {
   id: "act_demo",
   name: "Seoul Beauty KR",
-  maskedId: "act_•••• 8291",
+  maskedId: "act_••••8291",
   currency: "KRW",
   timezone: "Asia/Seoul",
   status: "healthy"
@@ -40,11 +48,33 @@ const DemoContext = createContext<DemoContextValue | null>(null);
 
 export function DemoProvider({ children }: { children: ReactNode }) {
   const accounts = demoProvider.listAdAccounts();
-  const [accountIndex, setAccountIndex] = useState(0);
+  const [accountId, setAccountId] = useState(accounts[0]?.id ?? fallbackAccount.id);
   const [dateRange, setDateRangeState] = useState<DateRange>("近 7 天");
-  const [compareRange, setCompareRange] = useState<CompareRange>("上一周期");
+  const [compareRange, setCompareRangeState] = useState<CompareRange>("上一周期");
   const [revision, setRevision] = useState(0);
-  const account = accounts[accountIndex] ?? accounts[0] ?? fallbackAccount;
+  const [loadedStorage, setLoadedStorage] = useState(false);
+  const account = accounts.find((item) => item.id === accountId) ?? accounts[0] ?? fallbackAccount;
+  const accountIndex = Math.max(0, accounts.findIndex((item) => item.id === account.id));
+
+  useEffect(() => {
+    const raw = window.localStorage.getItem(storageKey);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as PersistedDemoState;
+        if (parsed.accountId && accounts.some((item) => item.id === parsed.accountId)) setAccountId(parsed.accountId);
+        if (parsed.dateRange && dateRanges.includes(parsed.dateRange)) setDateRangeState(parsed.dateRange);
+        if (parsed.compareRange && compareRanges.includes(parsed.compareRange)) setCompareRangeState(parsed.compareRange);
+      } catch {
+        window.localStorage.removeItem(storageKey);
+      }
+    }
+    setLoadedStorage(true);
+  }, [accounts]);
+
+  useEffect(() => {
+    if (!loadedStorage) return;
+    window.localStorage.setItem(storageKey, JSON.stringify({ accountId: account.id, dateRange, compareRange }));
+  }, [account.id, compareRange, dateRange, loadedStorage]);
 
   const value = useMemo<DemoContextValue>(() => {
     const queryContext: DemoQueryContext = { accountId: account.id, dateRange, compareRange };
@@ -58,11 +88,11 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       revision,
       queryContext,
       accountLabel: `广告账户 / ${account.name}`,
-      dateLabel: `${dateRange} · ${compareRange} · ${account.timezone}`,
+      dateLabel: `${formatDateRange(dateRange)} · ${account.timezone}`,
       cycleAccount: () => {
-        const nextIndex = (accountIndex + 1) % accounts.length;
+        const nextIndex = accounts.length > 0 ? (accountIndex + 1) % accounts.length : 0;
         const nextAccount = accounts[nextIndex] ?? account;
-        setAccountIndex(nextIndex);
+        setAccountId(nextAccount.id);
         setRevision((current) => current + 1);
         return nextAccount;
       },
@@ -76,19 +106,23 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       cycleCompareRange: () => {
         const currentIndex = compareRanges.indexOf(compareRange);
         const next = compareRanges[(currentIndex + 1) % compareRanges.length] ?? "上一周期";
-        setCompareRange(next);
+        setCompareRangeState(next);
         setRevision((current) => current + 1);
         return next;
       },
       setAccountByName: (name: string) => {
-        const nextIndex = accounts.findIndex((item) => item.name === name);
-        if (nextIndex >= 0) {
-          setAccountIndex(nextIndex);
+        const next = accounts.find((item) => item.name === name);
+        if (next) {
+          setAccountId(next.id);
           setRevision((current) => current + 1);
         }
       },
       setDateRange: (range: DateRange) => {
         setDateRangeState(range);
+        setRevision((current) => current + 1);
+      },
+      setCompareRange: (range: CompareRange) => {
+        setCompareRangeState(range);
         setRevision((current) => current + 1);
       },
       touchDemoData
@@ -102,4 +136,10 @@ export function useDemoContext(): DemoContextValue {
   const context = useContext(DemoContext);
   if (!context) throw new Error("useDemoContext must be used within DemoProvider");
   return context;
+}
+
+function formatDateRange(range: DateRange): string {
+  if (range === "近 30 天") return "2026年5月27日–6月25日";
+  if (range === "近 14 天") return "2026年6月12日–6月25日";
+  return "2026年6月19日–6月25日";
 }

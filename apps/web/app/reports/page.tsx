@@ -1,5 +1,5 @@
-import { AdFlowApp } from "@/components/AdFlowApp";
+import { ReportsPage as ReportsFeature } from "@/features/reports/ReportsPage";
 
 export default function ReportsPage() {
-  return <AdFlowApp page="reports" />;
+  return <ReportsFeature />;
 }

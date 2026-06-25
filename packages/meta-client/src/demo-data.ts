@@ -1,5 +1,11 @@
 import type { AdAccount, CampaignEntity, KpiMetric, ReportRow, SyncJob } from "./types";
 
+export const defaultAccountId = "act_23840008291";
+export const usAccountId = "act_23840007712";
+
+export type SeedCampaignEntity = Omit<CampaignEntity, "accountId">;
+export type SeedSyncJob = Omit<SyncJob, "accountId">;
+
 export const demoAccounts: AdAccount[] = [
   {
     id: "act_23840008291",
@@ -30,7 +36,7 @@ export const kpiMetrics: KpiMetric[] = [
   { label: "CPC", value: "₩286", delta: "4.5%", direction: "up", note: "成本下降" }
 ];
 
-const campaignRows: CampaignEntity[] = [
+const campaignRows: SeedCampaignEntity[] = [
   { id: "23840001912", level: "campaign", name: "Summer Glow｜转化", status: "active", effective: "投放中", budget: "₩260,000 / 日", spend: "₩1,284,000", purchases: "122", cpa: "₩10,525", value: "₩4,930,100", roas: "3.84", impressions: "438,206", ctr: "2.88%", cpc: "₩246", updated: "今天 09:42" },
   { id: "23840001923", level: "campaign", name: "Retargeting｜7D", status: "active", effective: "投放中", budget: "₩190,000 / 日", spend: "₩968,400", purchases: "88", cpa: "₩11,005", value: "₩3,205,400", roas: "3.31", impressions: "286,410", ctr: "3.42%", cpc: "₩222", updated: "今天 09:38" },
   { id: "23840001937", level: "campaign", name: "New Serum｜Broad", status: "active", effective: "投放中", budget: "₩170,000 / 日", spend: "₩842,700", purchases: "61", cpa: "₩13,815", value: "₩2,073,200", roas: "2.46", impressions: "312,645", ctr: "2.51%", cpc: "₩268", updated: "今天 08:54" },
@@ -43,7 +49,7 @@ const campaignRows: CampaignEntity[] = [
   { id: "23840002002", level: "campaign", name: "Creative Test｜June 04", status: "paused", effective: "已暂停", budget: "₩50,000 / 日", spend: "₩0", purchases: "—", cpa: "—", value: "—", roas: "—", impressions: "—", ctr: "—", cpc: "—", updated: "6月22日" }
 ];
 
-const adSetRows: CampaignEntity[] = [
+const adSetRows: SeedCampaignEntity[] = [
   { id: "23841001101", level: "adset", name: "Broad｜KR｜23–45", status: "active", effective: "投放中", budget: "₩150,000 / 日", spend: "₩728,400", purchases: "71", cpa: "₩10,259", value: "₩2,774,300", roas: "3.81", impressions: "246,118", ctr: "2.92%", cpc: "₩243", updated: "今天 09:41" },
   { id: "23841001102", level: "adset", name: "Interest｜K-Beauty", status: "active", effective: "投放中", budget: "₩110,000 / 日", spend: "₩555,600", purchases: "51", cpa: "₩10,894", value: "₩2,155,800", roas: "3.88", impressions: "192,088", ctr: "2.83%", cpc: "₩250", updated: "今天 09:40" },
   { id: "23841001120", level: "adset", name: "Website Visitors｜7D", status: "active", effective: "投放中", budget: "₩100,000 / 日", spend: "₩508,200", purchases: "49", cpa: "₩10,371", value: "₩1,824,100", roas: "3.59", impressions: "141,208", ctr: "3.62%", cpc: "₩218", updated: "今天 09:36" },
@@ -52,7 +58,7 @@ const adSetRows: CampaignEntity[] = [
   { id: "23841001142", level: "adset", name: "Reels｜Women 18–34", status: "paused", effective: "已暂停", budget: "₩150,000 / 日", spend: "₩694,900", purchases: "32", cpa: "₩21,716", value: "₩1,195,200", roas: "1.72", impressions: "401,208", ctr: "1.94%", cpc: "₩311", updated: "昨天 18:10" }
 ];
 
-const adRows: CampaignEntity[] = [
+const adRows: SeedCampaignEntity[] = [
   { id: "23842001401", level: "ad", name: "UGC｜Routine｜V3", status: "active", effective: "投放中", budget: "广告组预算", spend: "₩438,200", purchases: "46", cpa: "₩9,526", value: "₩1,841,400", roas: "4.20", impressions: "139,550", ctr: "3.18%", cpc: "₩232", updated: "今天 09:40" },
   { id: "23842001402", level: "ad", name: "Static｜Summer Glow｜01", status: "active", effective: "投放中", budget: "广告组预算", spend: "₩390,200", purchases: "37", cpa: "₩10,546", value: "₩1,420,500", roas: "3.64", impressions: "128,248", ctr: "2.79%", cpc: "₩248", updated: "今天 09:39" },
   { id: "23842001408", level: "ad", name: "Static｜Summer Glow｜02", status: "active", effective: "投放中", budget: "广告组预算", spend: "₩284,600", purchases: "24", cpa: "₩11,858", value: "₩952,200", roas: "3.35", impressions: "104,112", ctr: "2.49%", cpc: "₩270", updated: "今天 09:35" },
@@ -74,7 +80,7 @@ export const reportRows: ReportRow[] = [
   { date: "2026-06-24", platform: "Instagram", spend: "₩298,800", impressions: "109,870", clicks: "2,704", purchases: "29", roas: "2.51" }
 ];
 
-export const syncJobs: SyncJob[] = [
+export const syncJobs: SeedSyncJob[] = [
   { id: "sync-insights", type: "同步 Insights", scope: "近 7 天 · Ad", status: "running", progress: "68%", startedAt: "10:42:18", elapsed: "1m 12s", requestId: "req_8d91..." },
   { id: "sync-entities", type: "同步广告对象", scope: "Campaign / Ad Set / Ad", status: "success", progress: "100%", startedAt: "10:34:02", elapsed: "48s", requestId: "req_27bc..." },
   { id: "apply-batch", type: "批量暂停", scope: "3 个 Campaign", status: "partial", progress: "2 / 3", startedAt: "09:16:44", elapsed: "9s", requestId: "req_114f..." },

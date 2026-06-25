@@ -1,5 +1,5 @@
-import { AdFlowApp } from "@/components/AdFlowApp";
+import { CreateWizard } from "@/features/campaigns/CreateWizard";
 
 export default function NewCampaignPage() {
-  return <AdFlowApp page="campaigns-new" />;
+  return <CreateWizard />;
 }

@@ -1,5 +1,5 @@
-import { AdFlowApp } from "@/components/AdFlowApp";
+import { CampaignManager } from "@/features/campaigns/CampaignManager";
 
 export default function CampaignsPage() {
-  return <AdFlowApp page="campaigns" />;
+  return <CampaignManager />;
 }

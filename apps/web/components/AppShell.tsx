@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, ChevronDown, CircleHelp, FileBarChart, Grid3X3, Image, LayoutDashboard, RefreshCcw, Settings, SlidersHorizontal } from "lucide-react";
+import { ChevronDown, CircleHelp, FileBarChart, Grid3X3, Image, LayoutDashboard, RefreshCcw, Settings, SlidersHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 import { cn } from "@adflow/shared";
@@ -123,7 +123,7 @@ export function AppShell({
           </button>
           <div className="topbar-spacer" />
           <button className="top-control" data-testid="date-range-picker" type="button" onClick={cycleDate}>
-            <CalendarDays size={14} /> {dateRange} <ChevronDown size={13} />
+            {dateRange} <ChevronDown size={13} />
           </button>
           <button className="top-control" type="button" onClick={cycleCompare}>对比：{compareRange}</button>
           <button className="icon-control" type="button" aria-label="刷新同步" onClick={refresh}>

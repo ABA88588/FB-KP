@@ -1,5 +1,5 @@
-import { AdFlowApp } from "@/components/AdFlowApp";
+import { SyncCenterPage as SyncCenterFeature } from "@/features/sync/SyncCenterPage";
 
 export default function SyncCenterPage() {
-  return <AdFlowApp page="sync-center" />;
+  return <SyncCenterFeature />;
 }

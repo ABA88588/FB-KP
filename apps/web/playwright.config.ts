@@ -4,6 +4,7 @@ export default defineConfig({
   testDir: "./e2e",
   outputDir: "../../test-results/playwright",
   snapshotPathTemplate: "../../screenshots/{arg}{ext}",
+  reporter: [["list"], ["html", { outputFolder: "../../playwright-report", open: "never" }]],
   timeout: 30_000,
   expect: {
     timeout: 5_000

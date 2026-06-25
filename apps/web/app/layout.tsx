@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AdFlowApp } from "@/components/AdFlowApp";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -9,7 +10,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body><AdFlowApp>{children}</AdFlowApp></body>
     </html>
   );
 }

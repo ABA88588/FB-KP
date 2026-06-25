@@ -12,6 +12,7 @@ test.describe("UI reference screenshots", () => {
   test.beforeEach(async ({ page }) => {
     await mkdir(outputDir, { recursive: true });
     await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript(() => window.localStorage.clear());
   });
 
   test("captures implemented pages at 1440x900", async ({ page }) => {

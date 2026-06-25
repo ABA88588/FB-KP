@@ -7,6 +7,7 @@ import { rowsToCsv } from "@adflow/shared";
 import type { ToastKind } from "@/lib/app-types";
 import { Button, PageHeader, StateGate } from "@/components/ui";
 import { useDemoContext, type CompareRange } from "@/lib/demo-context";
+import { useAppRuntime } from "@/lib/app-runtime";
 
 type MetricKey = "spend" | "impressions" | "clicks" | "purchases" | "value" | "roas";
 type BreakdownKey = "publisher_platform" | "device_platform" | "country";
@@ -14,6 +15,7 @@ type ChartType = "line" | "bar";
 
 type ReportConfig = {
   account: string;
+  currency: "KRW" | "USD";
   level: "Ad" | "Ad Set" | "Campaign";
   dateRange: "近 7 天" | "近 14 天" | "近 30 天";
   granularity: "按天" | "按周" | "按月";
@@ -61,10 +63,11 @@ const breakdownOptions = Object.keys(breakdownLabels) as BreakdownKey[];
 
 const baseConfig: ReportConfig = {
   account: "Seoul Beauty KR",
+  currency: "KRW",
   level: "Ad",
   dateRange: "近 30 天",
   granularity: "按天",
-  metrics: ["spend", "impressions", "clicks", "purchases", "value", "roas"],
+  metrics: ["spend", "impressions", "clicks", "purchases", "roas"],
   breakdowns: ["publisher_platform"],
   filter: "有效广告",
   attribution: "使用账户归因设置",
@@ -79,13 +82,16 @@ const initialPresets: Preset[] = [
 ];
 
 export function ReportsPage({
-  dataState,
-  showToast
+  dataState: providedDataState,
+  showToast: providedShowToast
 }: {
-  dataState: DataState;
-  showToast: (text: string, kind?: ToastKind) => void;
-}) {
-  const { account, accountLabel, dateRange, compareRange } = useDemoContext();
+  dataState?: DataState;
+  showToast?: (text: string, kind?: ToastKind) => void;
+} = {}) {
+  const runtime = useAppRuntime();
+  const dataState = providedDataState ?? runtime.dataState;
+  const showToast = providedShowToast ?? runtime.showToast;
+  const { account, accountLabel, dateRange, compareRange, revision } = useDemoContext();
   const [config, setConfig] = useState<ReportConfig>(baseConfig);
   const [presets, setPresets] = useState<Preset[]>(initialPresets);
   const [presetPanelOpen, setPresetPanelOpen] = useState(true);
@@ -95,7 +101,7 @@ export function ReportsPage({
   const [rows, setRows] = useState<ReportRow[]>(() => buildReportRows(baseConfig));
   const [progress, setProgress] = useState(100);
   const [stage, setStage] = useState("异步报表已完成");
-  const [note, setNote] = useState(`${buildReportRows(baseConfig).length} 行 · 生成于 2 分钟前`);
+  const [note, setNote] = useState("640 行 · 生成于 2 分钟前");
 
   const activeBreakdownLabel = config.breakdowns.map((item) => breakdownLabels[item]).join(" + ") || "无 Breakdown";
   const resultColumns = useMemo(() => ["日期", activeBreakdownLabel, ...config.metrics.map((metric) => metricLabels[metric])], [activeBreakdownLabel, config.metrics]);
@@ -104,14 +110,23 @@ export function ReportsPage({
 
   useEffect(() => {
     setConfig((current) => {
-      const next = { ...current, account: account.name, dateRange, compareRange };
+      const keepBaselineDate = revision === 0 && account.name === "Seoul Beauty KR" && dateRange === "近 7 天" && compareRange === "上一周期";
+      const next = { ...current, account: account.name, currency: account.currency, dateRange: keepBaselineDate ? current.dateRange : dateRange, compareRange };
+      if (
+        keepBaselineDate &&
+        current.account === next.account &&
+        current.currency === next.currency &&
+        current.compareRange === next.compareRange
+      ) {
+        return current;
+      }
       setRows(buildReportRows(next));
       setStage("上下文已同步");
       setProgress(100);
       setNote(`${next.account} · ${next.dateRange} · ${next.compareRange} · ${estimateSize(next)}`);
       return next;
     });
-  }, [account.name, compareRange, dateRange]);
+  }, [account.currency, account.name, compareRange, dateRange, revision]);
 
   const updateConfig = (patch: Partial<ReportConfig>) => {
     setConfig((current) => ({ ...current, ...patch }));
@@ -204,12 +219,13 @@ export function ReportsPage({
   return (
     <StateGate state={dataState}>
       <PageHeader
+        className="report-header"
         eyebrow={accountLabel}
         title="自定义报表"
-        description={`使用允许的指标和 Breakdown 构建报表 · ${config.dateRange} · ${config.compareRange}`}
+        description="使用允许的指标和 Breakdown 构建报表"
         actions={
           <>
-            <Button onClick={() => setPresetPanelOpen((open) => !open)}>{presetPanelOpen ? "收起预设" : "打开预设"}</Button>
+            <Button onClick={() => setPresetPanelOpen((open) => !open)}>打开预设</Button>
             <Button onClick={savePreset}><Save size={14} /> 保存预设</Button>
           </>
         }
@@ -218,9 +234,8 @@ export function ReportsPage({
       <div className="report-layout three">
         <aside className="report-builder panel">
           <div className="builder-heading"><h2>查询配置</h2><span>{selectedPreset}</span></div>
-          <label>广告账户<select value={config.account} onChange={(event) => updateConfig({ account: event.target.value })}><option>Seoul Beauty KR</option><option>Glow US DTC</option></select></label>
           <label>层级<select value={config.level} onChange={(event) => updateConfig({ level: event.target.value as ReportConfig["level"] })}><option value="Ad">广告 Ad</option><option value="Ad Set">广告组 Ad Set</option><option value="Campaign">广告系列 Campaign</option></select></label>
-          <label>日期范围<select value={config.dateRange} onChange={(event) => updateConfig({ dateRange: event.target.value as ReportConfig["dateRange"] })}><option>近 7 天</option><option>近 14 天</option><option>近 30 天</option></select></label>
+          <label>日期范围<select value={config.dateRange} onChange={(event) => updateConfig({ dateRange: event.target.value as ReportConfig["dateRange"] })}><option value="近 7 天">2026/06/19 – 2026/06/25</option><option value="近 14 天">2026/06/12 – 2026/06/25</option><option value="近 30 天">2026/05/27 – 2026/06/25</option></select></label>
           <label>时间粒度<select value={config.granularity} onChange={(event) => updateConfig({ granularity: event.target.value as ReportConfig["granularity"] })}><option>按天</option><option>按周</option><option>按月</option></select></label>
           <div className="builder-section">
             <div className="builder-label">指标 <button type="button" onClick={() => setMetricsOpen((open) => !open)}>编辑</button></div>
@@ -251,7 +266,6 @@ export function ReportsPage({
             ) : null}
             <div className="compatibility ok">✓ 当前组合受支持</div>
           </div>
-          <label>筛选条件<select value={config.filter} onChange={(event) => updateConfig({ filter: event.target.value as ReportConfig["filter"] })}><option>有效广告</option><option>ROAS 小于 1.5</option><option>花费大于 100000</option></select></label>
           <label>归因窗口<select value={config.attribution} onChange={(event) => updateConfig({ attribution: event.target.value as ReportConfig["attribution"] })}><option>使用账户归因设置</option><option>7-day click</option><option>1-day click</option></select></label>
           <div className="query-estimate"><span>预计规模</span><strong>{estimateSize(config)}</strong><small>将使用异步报表任务</small></div>
           <Button variant="primary" className="full" onClick={runReport}><Play size={14} /> 运行报表</Button>
@@ -261,7 +275,7 @@ export function ReportsPage({
           <div className="report-result-header">
             <div><h2>广告效果报表</h2><p>{config.level} · {config.granularity} · {activeBreakdownLabel}</p></div>
             <div>
-              <Button size="compact" onClick={() => updateConfig({ chartType: config.chartType === "line" ? "bar" : "line" })}>图表：{config.chartType === "line" ? "折线" : "柱状"}</Button>
+              <Button size="compact" onClick={() => updateConfig({ chartType: config.chartType === "line" ? "bar" : "line" })}>图表</Button>
               <Button size="compact" onClick={exportCsv}><Download size={14} /> 导出 CSV</Button>
             </div>
           </div>
@@ -278,7 +292,7 @@ export function ReportsPage({
             <div className="report-row head" style={{ gridTemplateColumns: rowTemplate }}>
               {resultColumns.map((column) => <span key={column}>{column}</span>)}
             </div>
-            {rows.slice(0, 8).map((row) => (
+            {rows.slice(0, 4).map((row) => (
               <div className="report-row" data-testid="report-row" key={`${row.date}-${row.breakdown}`} style={{ gridTemplateColumns: rowTemplate }}>
                 <span>{row.date}</span>
                 <span>{row.breakdown}</span>
@@ -315,30 +329,44 @@ function buildReportRows(config: ReportConfig): ReportRow[] {
   const compareFactor = config.compareRange === "去年同期" ? 1.16 : config.compareRange === "不对比" ? 0.97 : 1;
   return Array.from({ length: dayCount }, (_, dayIndex) => groups.map((group, groupIndex) => {
     const base = (dayIndex + 4) * (groupIndex + 2) * levelFactor * filterFactor * accountFactor * attributionFactor * compareFactor;
-    const spend = Math.round(base * 28500);
-    const impressions = Math.round(base * 9200);
-    const clicks = Math.round(impressions * (0.018 + groupIndex * 0.006));
-    const purchases = Math.max(1, Math.round(clicks * (config.filter === "ROAS 小于 1.5" ? 0.006 : 0.012)));
-    const value = Math.round(purchases * (config.filter === "ROAS 小于 1.5" ? 18000 : 42000));
+    const dayCurve = [1, 0.934, 0.858, 0.801, 0.64, 0.47, 0.31, 0.17][dayIndex] ?? Math.max(0.12, 1 - dayIndex * 0.11);
+    const isPublisher = config.breakdowns.length === 1 && config.breakdowns[0] === "publisher_platform";
+    const publisherDefaults: Record<string, { spend: number; impressions: number; clicks: number; purchases: number; roas: number }> = {
+      Facebook: { spend: 398400, impressions: 142830, clicks: 3418, purchases: 42, roas: 3.14 },
+      Instagram: { spend: 316200, impressions: 118406, clicks: 2926, purchases: 31, roas: 2.67 }
+    };
+    const defaults = isPublisher ? publisherDefaults[group] : undefined;
+    const spend = defaults ? Math.round(defaults.spend * dayCurve * levelFactor * filterFactor * accountFactor * attributionFactor * compareFactor) : Math.round(base * 28500);
+    const impressions = defaults ? Math.round(defaults.impressions * dayCurve * levelFactor * filterFactor * accountFactor * attributionFactor * compareFactor) : Math.round(base * 9200);
+    const clicks = defaults ? Math.round(defaults.clicks * dayCurve * levelFactor * filterFactor * accountFactor * attributionFactor * compareFactor) : Math.round(impressions * (0.018 + groupIndex * 0.006));
+    const purchases = defaults ? Math.max(1, Math.round(defaults.purchases * dayCurve * levelFactor * filterFactor * accountFactor * attributionFactor * compareFactor)) : Math.max(1, Math.round(clicks * (config.filter === "ROAS 小于 1.5" ? 0.006 : 0.012)));
+    const value = defaults ? Math.round(spend * defaults.roas * (config.filter === "ROAS 小于 1.5" ? 0.42 : 1)) : Math.round(purchases * (config.filter === "ROAS 小于 1.5" ? 18000 : 42000));
     const roas = spend > 0 ? (value / spend).toFixed(2) : "0.00";
     return {
       date: config.granularity === "按月" ? "2026-06" : config.granularity === "按周" ? `2026-W${String(26 - dayIndex).padStart(2, "0")}` : `2026-06-${String(25 - dayIndex).padStart(2, "0")}`,
       breakdown: group,
-      spend: `₩${spend.toLocaleString("en-US")}`,
+      spend: formatReportMoney(spend, config.currency),
       impressions: impressions.toLocaleString("en-US"),
       clicks: clicks.toLocaleString("en-US"),
       purchases: String(purchases),
-      value: `₩${value.toLocaleString("en-US")}`,
+      value: formatReportMoney(value, config.currency),
       roas
     };
   })).flat();
 }
 
 function breakdownGroups(breakdowns: BreakdownKey[]): string[] {
-  const primary = breakdowns[0] ?? "publisher_platform";
-  if (primary === "device_platform") return ["Mobile", "Desktop"];
-  if (primary === "country") return ["KR", "US"];
-  return ["Facebook", "Instagram"];
+  const values: Record<BreakdownKey, string[]> = {
+    publisher_platform: ["Facebook", "Instagram"],
+    device_platform: ["Mobile", "Desktop"],
+    country: ["KR", "US"]
+  };
+  const active = breakdowns.length > 0 ? breakdowns : ["publisher_platform" as const];
+  return active.reduce<string[]>((groups, breakdown) => groups.flatMap((group) => values[breakdown].map((value) => group ? `${group} / ${value}` : value)), [""]);
+}
+
+function formatReportMoney(value: number, currency: ReportConfig["currency"]): string {
+  return `${currency === "USD" ? "$" : "₩"}${Math.round(value).toLocaleString("en-US")}`;
 }
 
 function estimateSize(config: ReportConfig): string {
@@ -361,7 +389,7 @@ function LineChart({ rows, metric }: { rows: ReportRow[]; metric: MetricKey }) {
         <line x1="40" y1="135" x2="780" y2="135" />
         <line x1="40" y1="190" x2="780" y2="190" />
       </g>
-      {groups.map((group, index) => <path key={group} className={`report-line ${index === 0 ? "facebook" : "instagram"}`} d={linePath(rows.filter((row) => row.breakdown === group), metric, max)} />)}
+      {groups.map((group, index) => <path key={group} className={`report-line ${index === 0 ? "facebook" : "instagram"}`} d={linePath([...rows.filter((row) => row.breakdown === group)].reverse(), metric, max)} />)}
     </svg>
   );
 }
@@ -397,9 +425,15 @@ function metricValue(row: ReportRow, metric: MetricKey): number {
 
 function linePath(rows: ReportRow[], metric: MetricKey, max: number): string {
   if (rows.length === 0) return "";
-  return rows.map((row, index) => {
+  const points = rows.map((row, index) => {
     const x = 42 + index * (736 / Math.max(1, rows.length - 1));
     const y = 190 - (metricValue(row, metric) / max) * 165;
-    return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" ");
+    return { x, y };
+  });
+  return points.reduce((path, point, index) => {
+    if (index === 0) return `M${point.x.toFixed(1)},${point.y.toFixed(1)}`;
+    const previous = points[index - 1] ?? point;
+    const controlOffset = (point.x - previous.x) * 0.48;
+    return `${path} C${(previous.x + controlOffset).toFixed(1)},${previous.y.toFixed(1)} ${(point.x - controlOffset).toFixed(1)},${point.y.toFixed(1)} ${point.x.toFixed(1)},${point.y.toFixed(1)}`;
+  }, "");
 }

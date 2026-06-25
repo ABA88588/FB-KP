@@ -12,6 +12,7 @@ export type AdAccount = {
 };
 
 export type CampaignEntity = {
+  accountId: string;
   id: string;
   level: EntityLevel;
   name: string;
@@ -40,6 +41,7 @@ export type KpiMetric = {
 };
 
 export type SyncJob = {
+  accountId: string;
   id: string;
   type: string;
   scope: string;
@@ -58,6 +60,18 @@ export type SyncJob = {
     fbtraceId: string;
     action: string;
   };
+};
+
+export type CreativeAsset = {
+  accountId: string;
+  id: string;
+  title: string;
+  file: string;
+  type: "图片" | "视频";
+  usage: number;
+  recent: number;
+  thumb: number;
+  status: "active" | "paused" | "archived";
 };
 
 export type ReportRow = {

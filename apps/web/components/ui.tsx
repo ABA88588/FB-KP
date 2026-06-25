@@ -50,15 +50,17 @@ export function PageHeader({
   eyebrow,
   title,
   description,
-  actions
+  actions,
+  className
 }: {
   eyebrow: string;
   title: string;
   description: string;
   actions?: ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="page-header compact-header">
+    <div className={cn("page-header compact-header", className)}>
       <div>
         <div className="eyebrow">{eyebrow}</div>
         <h1>{title}</h1>

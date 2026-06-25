@@ -7,23 +7,27 @@ import { cn } from "@adflow/shared";
 import { demoProvider, type SyncJob } from "@adflow/meta-client";
 import type { ToastKind } from "@/lib/app-types";
 import { useDemoContext } from "@/lib/demo-context";
+import { useAppRuntime } from "@/lib/app-runtime";
 import { Button, PageHeader, StateGate, StatusDot } from "@/components/ui";
 
 const tabs = ["同步任务", "API 错误", "数据新鲜度", "审计日志"] as const;
 
 export function SyncCenterPage({
-  dataState,
-  showToast
+  dataState: providedDataState,
+  showToast: providedShowToast
 }: {
-  dataState: DataState;
-  showToast: (text: string, kind?: ToastKind) => void;
-}) {
+  dataState?: DataState;
+  showToast?: (text: string, kind?: ToastKind) => void;
+} = {}) {
+  const runtime = useAppRuntime();
+  const dataState = providedDataState ?? runtime.dataState;
+  const showToast = providedShowToast ?? runtime.showToast;
   const { account, accountLabel, dateLabel, touchDemoData } = useDemoContext();
   const [tab, setTab] = useState<(typeof tabs)[number]>("同步任务");
   const [version, setVersion] = useState(0);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [checkedAt, setCheckedAt] = useState("刚刚");
-  const jobs = demoProvider.listSyncJobs();
+  const jobs = demoProvider.listSyncJobs(account.id);
   const errorJobs = jobs.filter((job) => Boolean(job.error));
   const visibleJobs = tab === "API 错误" ? errorJobs : jobs;
   const selectedJob = jobs.find((job) => job.id === selectedJobId) ?? null;
@@ -37,7 +41,7 @@ export function SyncCenterPage({
   void version;
 
   const enqueueSync = () => {
-    const job = demoProvider.enqueueSyncJob();
+    const job = demoProvider.enqueueSyncJob(account.id);
     setTab("同步任务");
     setSelectedJobId(job.id);
     setVersion((current) => current + 1);
@@ -48,7 +52,7 @@ export function SyncCenterPage({
       { delay: 1800, progress: "100%", elapsed: "14s", status: "success" as const }
     ].forEach((step) => {
       window.setTimeout(() => {
-        demoProvider.updateSyncJob(job.id, step);
+        demoProvider.updateSyncJob(account.id, job.id, step);
         if ("status" in step && step.status === "success") touchDemoData();
         setVersion((current) => current + 1);
       }, step.delay);

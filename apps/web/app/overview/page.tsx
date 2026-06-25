@@ -1,5 +1,5 @@
-import { AdFlowApp } from "@/components/AdFlowApp";
+import { OverviewPage as OverviewFeature } from "@/features/overview/OverviewPage";
 
 export default function OverviewPage() {
-  return <AdFlowApp page="overview" />;
+  return <OverviewFeature />;
 }

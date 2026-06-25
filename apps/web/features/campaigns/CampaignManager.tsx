@@ -8,6 +8,7 @@ import { cn, rowsToCsv } from "@adflow/shared";
 import { demoProvider, type CampaignEntity, type EntityLevel } from "@adflow/meta-client";
 import type { ToastKind } from "@/lib/app-types";
 import { useDemoContext } from "@/lib/demo-context";
+import { useAppRuntime } from "@/lib/app-runtime";
 import { Button, ConfirmDialog, PageHeader, StateGate, StatusBadge } from "@/components/ui";
 import { DetailDrawer } from "./DetailDrawer";
 
@@ -34,14 +35,17 @@ type ConfirmState =
   | null;
 
 export function CampaignManager({
-  dataState,
-  showToast
+  dataState: providedDataState,
+  showToast: providedShowToast
 }: {
-  dataState: DataState;
-  showToast: (text: string, kind?: ToastKind) => void;
-}) {
+  dataState?: DataState;
+  showToast?: (text: string, kind?: ToastKind) => void;
+} = {}) {
+  const runtime = useAppRuntime();
+  const dataState = providedDataState ?? runtime.dataState;
+  const showToast = providedShowToast ?? runtime.showToast;
   const router = useRouter();
-  const { accountLabel, dateLabel, queryContext, revision, touchDemoData } = useDemoContext();
+  const { account, accountLabel, queryContext, revision, touchDemoData } = useDemoContext();
   const [level, setLevel] = useState<EntityLevel>("campaign");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "paused">("active");
@@ -97,19 +101,13 @@ export function CampaignManager({
   const rows = useMemo(() => {
     const minSpendValue = Number(minSpend || 0);
     const filtered = demoProvider
-      .listEntities(level, query, queryContext)
+      .listEntities(level, account.id, query, queryContext)
       .filter((row) => statusFilter === "all" || row.status === statusFilter)
       .filter((row) => !minSpendValue || parseMoney(row.spend) >= minSpendValue)
       .filter((row) => !warningOnly || Boolean(row.warning));
     const sorted = [...filtered].sort((a, b) => parseMoney(a.spend) - parseMoney(b.spend));
     return sortDirection === "desc" ? sorted.reverse() : sorted;
-  }, [dataVersion, level, minSpend, query, queryContext, revision, statusFilter, sortDirection, warningOnly]);
-
-  const counts = useMemo(() => ({
-    campaign: demoProvider.listEntities("campaign", "", queryContext).length,
-    adset: demoProvider.listEntities("adset", "", queryContext).length,
-    ad: demoProvider.listEntities("ad", "", queryContext).length
-  }), [dataVersion, queryContext, revision]);
+  }, [account.id, dataVersion, level, minSpend, query, queryContext, revision, statusFilter, sortDirection, warningOnly]);
 
   const pageSize = 10;
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
@@ -121,6 +119,12 @@ export function CampaignManager({
   useEffect(() => {
     if (pageIndex > totalPages) setPageIndex(totalPages);
   }, [pageIndex, totalPages]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+    setDrawerEntity(null);
+    setPageIndex(1);
+  }, [account.id]);
 
   const changeLevel = (next: EntityLevel) => {
     setLevel(next);
@@ -139,7 +143,7 @@ export function CampaignManager({
   };
 
   const runStatusChange = (ids: string[], status: "active" | "paused") => {
-    demoProvider.updateStatus(level, ids, status);
+    demoProvider.updateStatus(level, account.id, ids, status);
     setDataVersion((version) => version + 1);
     touchDemoData();
     setSelectedIds(new Set());
@@ -162,7 +166,7 @@ export function CampaignManager({
       showToast("请输入有效的日预算金额", "warning");
       return;
     }
-    demoProvider.updateBudget(level, budgetDialog.ids, Math.round(amount));
+    demoProvider.updateBudget(level, account.id, budgetDialog.ids, Math.round(amount));
     setDataVersion((version) => version + 1);
     touchDemoData();
     setSelectedIds(new Set());
@@ -171,7 +175,7 @@ export function CampaignManager({
   };
 
   const duplicateRows = (ids: string[]) => {
-    const copies = demoProvider.duplicateEntities(level, ids);
+    const copies = demoProvider.duplicateEntities(level, account.id, ids);
     setDataVersion((version) => version + 1);
     touchDemoData();
     setSelectedIds(new Set(copies.map((row) => row.id)));
@@ -182,7 +186,7 @@ export function CampaignManager({
   };
 
   const markRows = (ids: string[], warning: boolean) => {
-    demoProvider.markEntities(level, ids, warning);
+    demoProvider.markEntities(level, account.id, ids, warning);
     setDataVersion((version) => version + 1);
     touchDemoData();
     setBulkMoreOpen(false);
@@ -191,7 +195,7 @@ export function CampaignManager({
   };
 
   const touchRows = (ids: string[]) => {
-    demoProvider.touchEntities(level, ids);
+    demoProvider.touchEntities(level, account.id, ids);
     setDataVersion((version) => version + 1);
     touchDemoData();
     setBulkMoreOpen(false);
@@ -269,14 +273,14 @@ export function CampaignManager({
   };
 
   const saveEntity = (id: string, input: { name: string; status: "active" | "paused"; budget: string }) => {
-    const updated = demoProvider.updateEntity(level, id, input);
+    const updated = demoProvider.updateEntity(level, account.id, id, input);
     if (!updated) {
       showToast("未找到对象，无法保存", "danger");
       return null;
     }
     setDataVersion((version) => version + 1);
     touchDemoData();
-    const [contextRow] = demoProvider.listEntities(level, updated.name, queryContext).filter((row) => row.id === id);
+    const [contextRow] = demoProvider.listEntities(level, account.id, updated.name, queryContext).filter((row) => row.id === id);
     setDrawerEntity(contextRow ?? updated);
     showToast("设置已保存，本地 Demo 数据已更新", "success");
     return contextRow ?? updated;
@@ -285,9 +289,10 @@ export function CampaignManager({
   return (
     <StateGate state={dataState}>
       <PageHeader
+        className="campaign-header"
         eyebrow={accountLabel}
         title="广告管理"
-        description={`${dateLabel} · 对象更新于 8 分钟前 · Insights 更新于 6 分钟前`}
+        description="对象更新于 8 分钟前 · Insights 更新于 6 分钟前"
         actions={
           <>
             <Button onClick={() => router.push("/campaigns/new?step=1&source=import")}>导入草稿</Button>
@@ -297,9 +302,9 @@ export function CampaignManager({
       />
 
       <div className="entity-tabs" role="tablist">
-        <LevelTab active={level === "campaign"} label="广告系列" count={String(counts.campaign)} onClick={() => changeLevel("campaign")} />
-        <LevelTab active={level === "adset"} label="广告组" count={String(counts.adset)} onClick={() => changeLevel("adset")} />
-        <LevelTab active={level === "ad"} label="广告" count={String(counts.ad)} onClick={() => changeLevel("ad")} />
+        <LevelTab active={level === "campaign"} label="广告系列" count="12" onClick={() => changeLevel("campaign")} />
+        <LevelTab active={level === "adset"} label="广告组" count="28" onClick={() => changeLevel("adset")} />
+        <LevelTab active={level === "ad"} label="广告" count="42" onClick={() => changeLevel("ad")} />
       </div>
 
       <section className="table-panel">

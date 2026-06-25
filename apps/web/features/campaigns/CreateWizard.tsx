@@ -7,6 +7,7 @@ import { demoProvider, type CreatedAdBundle } from "@adflow/meta-client";
 import { Button } from "@/components/ui";
 import type { ToastKind } from "@/lib/app-types";
 import { useDemoContext } from "@/lib/demo-context";
+import { useAppRuntime } from "@/lib/app-runtime";
 
 type WizardStep = 1 | 2 | 3 | 4;
 
@@ -70,9 +71,11 @@ const initialDraft: Draft = {
   previewPlacement: "Instagram Feed"
 };
 
-export function CreateWizard({ showToast }: { showToast: (text: string, kind?: ToastKind) => void }) {
+export function CreateWizard({ showToast: providedShowToast }: { showToast?: (text: string, kind?: ToastKind) => void } = {}) {
   const router = useRouter();
-  const { accountLabel, touchDemoData } = useDemoContext();
+  const runtime = useAppRuntime();
+  const showToast = providedShowToast ?? runtime.showToast;
+  const { account, accountLabel, touchDemoData } = useDemoContext();
   const [step, setStep] = useState<WizardStep>(1);
   const [draft, setDraft] = useState<Draft>(initialDraft);
   const [draftStatus, setDraftStatus] = useState("草稿已保存");
@@ -125,7 +128,7 @@ export function CreateWizard({ showToast }: { showToast: (text: string, kind?: T
       return;
     }
     const asset = creativeAssets.find((item) => item.id === draft.assetId) ?? creativeAssets[0];
-    const ids = demoProvider.createAdBundle({
+    const ids = demoProvider.createAdBundle(account.id, {
       campaignName: draft.campaignName,
       objective: draft.objective,
       budget: draft.budget,
