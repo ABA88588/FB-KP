@@ -2,10 +2,10 @@
 
 import { CalendarDays, ChevronDown, CircleHelp, FileBarChart, Grid3X3, Image, LayoutDashboard, RefreshCcw, Settings, SlidersHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useEffect, useState } from "react";
-import { demoAccounts } from "@adflow/meta-client";
+import { type ReactNode, useState } from "react";
 import { cn } from "@adflow/shared";
 import type { PageKey } from "@/lib/app-types";
+import { useDemoContext } from "@/lib/demo-context";
 import { DemoModeBanner, StatusDot } from "./ui";
 
 const navItems: Array<{ page: PageKey; label: string; href: string; icon: ReactNode; count?: string; danger?: boolean }> = [
@@ -17,8 +17,6 @@ const navItems: Array<{ page: PageKey; label: string; href: string; icon: ReactN
   { page: "settings", label: "设置", href: "/settings/connections", icon: <Settings size={16} /> }
 ];
 
-const dateRanges = ["近 7 天", "近 14 天", "近 30 天"] as const;
-const compareRanges = ["上一周期", "去年同期", "不对比"] as const;
 const workspaces = [
   { name: "云帆电商", role: "Owner", avatar: "云" },
   { name: "Seoul Growth", role: "Operator", avatar: "S" }
@@ -35,31 +33,12 @@ export function AppShell({
 }) {
   const router = useRouter();
   const activePage: PageKey = page === "campaigns-new" ? "campaigns" : page;
+  const { account, dateRange, compareRange, cycleAccount: cycleContextAccount, cycleDateRange, cycleCompareRange, touchDemoData } = useDemoContext();
   const [workspaceIndex, setWorkspaceIndex] = useState(0);
-  const [accountIndex, setAccountIndex] = useState(0);
-  const [dateIndex, setDateIndex] = useState(0);
-  const [compareIndex, setCompareIndex] = useState(0);
   const [syncLabel, setSyncLabel] = useState("数据已更新");
   const [helpOpen, setHelpOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const workspace = workspaces[workspaceIndex] ?? workspaces[0];
-  const account = demoAccounts[accountIndex] ?? {
-    id: "act_demo",
-    name: "Seoul Beauty KR",
-    maskedId: "act_•••• 8291",
-    currency: "KRW" as const,
-    timezone: "Asia/Seoul",
-    status: "healthy" as const
-  };
-
-  useEffect(() => {
-    window.localStorage.setItem("adflow.topbarState", JSON.stringify({
-      workspace: workspace.name,
-      account: account.id,
-      dateRange: dateRanges[dateIndex],
-      compare: compareRanges[compareIndex]
-    }));
-  }, [workspace.name, account.id, dateIndex, compareIndex]);
 
   const cycleWorkspace = () => {
     setWorkspaceIndex((current) => {
@@ -71,32 +50,23 @@ export function AppShell({
   };
 
   const cycleAccount = () => {
-    setAccountIndex((current) => {
-      const next = (current + 1) % demoAccounts.length;
-      const nextAccountName = demoAccounts[next]?.name ?? "Seoul Beauty KR";
-      onToast(`已切换广告账户：${nextAccountName}`, "success");
-      return next;
-    });
+    const next = cycleContextAccount();
+    onToast(`已切换广告账户：${next.name}`, "success");
   };
 
   const cycleDate = () => {
-    setDateIndex((current) => {
-      const next = (current + 1) % dateRanges.length;
-      onToast(`日期范围已切换：${dateRanges[next]}`, "success");
-      return next;
-    });
+    const next = cycleDateRange();
+    onToast(`日期范围已切换：${next}`, "success");
   };
 
   const cycleCompare = () => {
-    setCompareIndex((current) => {
-      const next = (current + 1) % compareRanges.length;
-      onToast(`对比周期：${compareRanges[next]}`, "info");
-      return next;
-    });
+    const next = cycleCompareRange();
+    onToast(`对比周期：${next}`, "info");
   };
 
   const refresh = () => {
     setSyncLabel("正在刷新…");
+    touchDemoData();
     onToast("已创建手动刷新任务，页面不会阻塞", "success");
     window.setTimeout(() => setSyncLabel("刚刚刷新"), 700);
   };
@@ -143,7 +113,7 @@ export function AppShell({
 
       <section className="main-shell">
         <header className="topbar">
-          <button className="account-picker" type="button" onClick={cycleAccount}>
+          <button className="account-picker" data-testid="account-picker" type="button" onClick={cycleAccount}>
             <span className="account-logo">S</span>
             <span className="account-copy">
               <strong>{account.name}</strong>
@@ -152,10 +122,10 @@ export function AppShell({
             <ChevronDown size={14} />
           </button>
           <div className="topbar-spacer" />
-          <button className="top-control" type="button" onClick={cycleDate}>
-            <CalendarDays size={14} /> {dateRanges[dateIndex]} <ChevronDown size={13} />
+          <button className="top-control" data-testid="date-range-picker" type="button" onClick={cycleDate}>
+            <CalendarDays size={14} /> {dateRange} <ChevronDown size={13} />
           </button>
-          <button className="top-control" type="button" onClick={cycleCompare}>对比：{compareRanges[compareIndex]}</button>
+          <button className="top-control" type="button" onClick={cycleCompare}>对比：{compareRange}</button>
           <button className="icon-control" type="button" aria-label="刷新同步" onClick={refresh}>
             <RefreshCcw size={15} />
           </button>

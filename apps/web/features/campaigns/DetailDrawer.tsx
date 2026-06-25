@@ -1,7 +1,7 @@
 "use client";
 
 import { Copy, Edit3, MoreHorizontal, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { CampaignEntity, EntityLevel } from "@adflow/meta-client";
 import { Button, StatusBadge, TrendChart } from "@/components/ui";
 
@@ -12,19 +12,33 @@ export function DetailDrawer({
   level,
   readOnly,
   onClose,
+  onSave,
   onToast
 }: {
   entity: CampaignEntity | null;
   level: EntityLevel;
   readOnly: boolean;
   onClose: () => void;
+  onSave: (id: string, input: { name: string; status: "active" | "paused"; budget: string }) => CampaignEntity | null;
   onToast: (message: string) => void;
 }) {
   const [tab, setTab] = useState<(typeof tabs)[number]>("概览");
   const [copied, setCopied] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState({ name: "", status: "paused" as "active" | "paused", budget: "" });
   const levelLabel = level === "campaign" ? "Campaign" : level === "adset" ? "Ad Set" : "Ad";
+
+  useEffect(() => {
+    if (!entity) return;
+    setEditForm({
+      name: entity.name,
+      status: entity.status,
+      budget: String(Number(entity.budget.replace(/[^\d.-]/g, "")) || 0)
+    });
+    setEditMode(false);
+    setCopied(false);
+  }, [entity]);
 
   const copyEntity = async () => {
     if (!entity) return;
@@ -37,6 +51,26 @@ export function DetailDrawer({
     }, null, 2));
     setCopied(true);
     onToast("已复制演示对象配置到剪贴板");
+  };
+
+  const saveEdit = () => {
+    if (!entity) return;
+    if (!editForm.name.trim()) {
+      onToast("名称不能为空");
+      return;
+    }
+    const updated = onSave(entity.id, editForm);
+    if (updated) {
+      setEditForm({ name: updated.name, status: updated.status, budget: String(Number(updated.budget.replace(/[^\d.-]/g, "")) || 0) });
+      setEditMode(false);
+    }
+  };
+
+  const cancelEdit = () => {
+    if (!entity) return;
+    setEditForm({ name: entity.name, status: entity.status, budget: String(Number(entity.budget.replace(/[^\d.-]/g, "")) || 0) });
+    setEditMode(false);
+    onToast("已取消编辑");
   };
 
   return (
@@ -64,7 +98,7 @@ export function DetailDrawer({
             </div>
             <div className="drawer-content">
               {tab === "概览" ? <OverviewTab entity={entity} /> : null}
-              {tab === "设置" ? <SettingsTab entity={entity} editMode={editMode} /> : null}
+              {tab === "设置" ? <SettingsTab entity={entity} editMode={editMode} form={editForm} setForm={setEditForm} onSave={saveEdit} onCancel={cancelEdit} /> : null}
               {tab === "趋势" ? <TrendTab /> : null}
               {tab === "活动" ? <ActivityTab /> : null}
             </div>
@@ -127,13 +161,36 @@ function OverviewTab({ entity }: { entity: CampaignEntity }) {
   );
 }
 
-function SettingsTab({ entity, editMode }: { entity: CampaignEntity; editMode: boolean }) {
+function SettingsTab({
+  entity,
+  editMode,
+  form,
+  setForm,
+  onSave,
+  onCancel
+}: {
+  entity: CampaignEntity;
+  editMode: boolean;
+  form: { name: string; status: "active" | "paused"; budget: string };
+  setForm: (form: { name: string; status: "active" | "paused"; budget: string }) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
   return (
     <section className="drawer-section">
       <h3>对象配置摘要</h3>
-      {editMode ? <div className="drawer-edit-note">演示编辑状态已开启，实际字段请在广告管理表格批量表单中保存。</div> : null}
+      {editMode ? (
+        <div className="drawer-edit-form">
+          <label>名称<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
+          <label>状态<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as "active" | "paused" })}><option value="active">ACTIVE</option><option value="paused">PAUSED</option></select></label>
+          <label>日预算 KRW<input value={form.budget} inputMode="numeric" onChange={(event) => setForm({ ...form, budget: event.target.value.replace(/\D/g, "") })} /></label>
+          <div><Button onClick={onCancel}>取消</Button><Button variant="primary" onClick={onSave}>保存设置</Button></div>
+        </div>
+      ) : null}
       <div className="setting-row"><span>名称</span><strong>{entity.name}</strong></div>
       <div className="setting-row"><span>Meta ID</span><strong>{entity.id}</strong></div>
+      <div className="setting-row"><span>当前状态</span><strong>{entity.status === "active" ? "ACTIVE" : "PAUSED"}</strong></div>
+      <div className="setting-row"><span>预算</span><strong>{entity.budget}</strong></div>
       <div className="setting-row"><span>默认创建状态</span><strong>PAUSED</strong></div>
       <div className="setting-row"><span>数据来源</span><strong>Demo Provider</strong></div>
     </section>

@@ -3,8 +3,10 @@
 import { Check, ChevronLeft, ChevronRight, Save, Send, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { demoProvider, type CreatedAdBundle } from "@adflow/meta-client";
 import { Button } from "@/components/ui";
 import type { ToastKind } from "@/lib/app-types";
+import { useDemoContext } from "@/lib/demo-context";
 
 type WizardStep = 1 | 2 | 3 | 4;
 
@@ -70,10 +72,12 @@ const initialDraft: Draft = {
 
 export function CreateWizard({ showToast }: { showToast: (text: string, kind?: ToastKind) => void }) {
   const router = useRouter();
+  const { accountLabel, touchDemoData } = useDemoContext();
   const [step, setStep] = useState<WizardStep>(1);
   const [draft, setDraft] = useState<Draft>(initialDraft);
   const [draftStatus, setDraftStatus] = useState("草稿已保存");
   const [published, setPublished] = useState(false);
+  const [publishedIds, setPublishedIds] = useState<CreatedAdBundle | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -116,8 +120,26 @@ export function CreateWizard({ showToast }: { showToast: (text: string, kind?: T
       router.replace(`/campaigns/new?step=${nextStep}`);
       return;
     }
+    if (publishedIds) {
+      router.push(`/campaigns?level=campaign&q=${encodeURIComponent(draft.campaignName)}&status=all&minSpend=0`);
+      return;
+    }
+    const asset = creativeAssets.find((item) => item.id === draft.assetId) ?? creativeAssets[0];
+    const ids = demoProvider.createAdBundle({
+      campaignName: draft.campaignName,
+      objective: draft.objective,
+      budget: draft.budget,
+      audience: draft.audience,
+      event: draft.event,
+      title: draft.title,
+      assetFile: asset.file
+    });
     setPublished(true);
-    showToast("模拟发布成功：已创建 4 个演示对象，状态均为 PAUSED", "success");
+    setPublishedIds(ids);
+    touchDemoData();
+    window.localStorage.setItem("adflow.lastPublishedBundle", JSON.stringify(ids));
+    showToast(`模拟发布成功：Campaign ${ids.campaignId}，Ad ${ids.adId} 已写入 DemoProvider`, "success");
+    window.setTimeout(() => router.push(`/campaigns?level=campaign&q=${encodeURIComponent(draft.campaignName)}&status=all&minSpend=0`), 500);
   };
 
   const back = () => {
@@ -134,7 +156,7 @@ export function CreateWizard({ showToast }: { showToast: (text: string, kind?: T
     <section className="wizard-screen">
       <header className="wizard-header inline">
         <div>
-          <div className="eyebrow">新建广告 · 草稿自动保存</div>
+          <div className="eyebrow">{accountLabel} · 新建广告 · 草稿自动保存</div>
           <h1>创建销售广告</h1>
         </div>
         <div className="draft-state"><Check size={14} /> {draftStatus}</div>
@@ -148,7 +170,7 @@ export function CreateWizard({ showToast }: { showToast: (text: string, kind?: T
           {step === 1 ? <CampaignStep draft={draft} updateDraft={updateDraft} /> : null}
           {step === 2 ? <AdSetStep draft={draft} updateDraft={updateDraft} /> : null}
           {step === 3 ? <CreativeStep draft={draft} updateDraft={updateDraft} /> : null}
-          {step === 4 ? <ReviewStep draft={draft} published={published} /> : null}
+          {step === 4 ? <ReviewStep draft={draft} published={published} publishedIds={publishedIds} /> : null}
         </div>
         <AdPreview draft={draft} updateDraft={updateDraft} />
       </div>
@@ -281,14 +303,14 @@ function CreativeStep({ draft, updateDraft }: { draft: Draft; updateDraft: (patc
   );
 }
 
-function ReviewStep({ draft, published }: { draft: Draft; published: boolean }) {
+function ReviewStep({ draft, published, publishedIds }: { draft: Draft; published: boolean; publishedIds: CreatedAdBundle | null }) {
   return (
     <section className="wizard-pane active">
       <div className={published ? "review-alert published" : "review-alert"}>
         <span><Check size={15} /></span>
         <div>
           <strong>{published ? "演示发布已完成" : "基础检查通过"}</strong>
-          <p>将创建 1 个 Campaign、1 个 Ad Set、1 个 Creative 和 1 个 Ad，全部为 PAUSED。</p>
+          <p>{publishedIds ? `Campaign ${publishedIds.campaignId} / Ad ${publishedIds.adId}` : "将创建 1 个 Campaign、1 个 Ad Set、1 个 Creative 和 1 个 Ad，全部为 PAUSED。"}</p>
         </div>
       </div>
       <ReviewCard title="Campaign" rows={[["名称", draft.campaignName], ["目标", draft.objective], ["特殊广告类别", draft.specialCategory], ["状态", "PAUSED"]]} />

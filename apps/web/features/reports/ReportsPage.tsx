@@ -1,11 +1,12 @@
 "use client";
 
 import { Download, Play, Save } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { DataState } from "@adflow/shared";
 import { rowsToCsv } from "@adflow/shared";
 import type { ToastKind } from "@/lib/app-types";
 import { Button, PageHeader, StateGate } from "@/components/ui";
+import { useDemoContext, type CompareRange } from "@/lib/demo-context";
 
 type MetricKey = "spend" | "impressions" | "clicks" | "purchases" | "value" | "roas";
 type BreakdownKey = "publisher_platform" | "device_platform" | "country";
@@ -20,6 +21,7 @@ type ReportConfig = {
   breakdowns: BreakdownKey[];
   filter: "有效广告" | "ROAS 小于 1.5" | "花费大于 100000";
   attribution: "使用账户归因设置" | "7-day click" | "1-day click";
+  compareRange: CompareRange;
   chartType: ChartType;
 };
 
@@ -66,6 +68,7 @@ const baseConfig: ReportConfig = {
   breakdowns: ["publisher_platform"],
   filter: "有效广告",
   attribution: "使用账户归因设置",
+  compareRange: "上一周期",
   chartType: "line"
 };
 
@@ -82,6 +85,7 @@ export function ReportsPage({
   dataState: DataState;
   showToast: (text: string, kind?: ToastKind) => void;
 }) {
+  const { account, accountLabel, dateRange, compareRange } = useDemoContext();
   const [config, setConfig] = useState<ReportConfig>(baseConfig);
   const [presets, setPresets] = useState<Preset[]>(initialPresets);
   const [presetPanelOpen, setPresetPanelOpen] = useState(true);
@@ -96,6 +100,18 @@ export function ReportsPage({
   const activeBreakdownLabel = config.breakdowns.map((item) => breakdownLabels[item]).join(" + ") || "无 Breakdown";
   const resultColumns = useMemo(() => ["日期", activeBreakdownLabel, ...config.metrics.map((metric) => metricLabels[metric])], [activeBreakdownLabel, config.metrics]);
   const rowTemplate = `1fr 1.2fr repeat(${config.metrics.length}, 0.9fr)`;
+  const chartMetric = config.metrics[0] ?? "spend";
+
+  useEffect(() => {
+    setConfig((current) => {
+      const next = { ...current, account: account.name, dateRange, compareRange };
+      setRows(buildReportRows(next));
+      setStage("上下文已同步");
+      setProgress(100);
+      setNote(`${next.account} · ${next.dateRange} · ${next.compareRange} · ${estimateSize(next)}`);
+      return next;
+    });
+  }, [account.name, compareRange, dateRange]);
 
   const updateConfig = (patch: Partial<ReportConfig>) => {
     setConfig((current) => ({ ...current, ...patch }));
@@ -140,7 +156,7 @@ export function ReportsPage({
         if (nextNote === "done") {
           const nextRows = buildReportRows(config);
           setRows(nextRows);
-          setNote(`${nextRows.length} 行 · ${config.level} · ${config.dateRange} · ${activeBreakdownLabel}`);
+          setNote(`${nextRows.length} 行 · ${config.account} · ${config.level} · ${config.dateRange} · ${config.granularity} · ${config.attribution}`);
           showToast("报表完成，结果已按当前配置更新", "success");
           return;
         }
@@ -188,9 +204,9 @@ export function ReportsPage({
   return (
     <StateGate state={dataState}>
       <PageHeader
-        eyebrow="广告账户 / Seoul Beauty KR"
+        eyebrow={accountLabel}
         title="自定义报表"
-        description="使用允许的指标和 Breakdown 构建报表"
+        description={`使用允许的指标和 Breakdown 构建报表 · ${config.dateRange} · ${config.compareRange}`}
         actions={
           <>
             <Button onClick={() => setPresetPanelOpen((open) => !open)}>{presetPanelOpen ? "收起预设" : "打开预设"}</Button>
@@ -252,10 +268,10 @@ export function ReportsPage({
           <div className="report-progress">
             <div><span>{stage}</span><strong>{progress}%</strong></div>
             <div className="progress-track"><i style={{ width: `${progress}%` }} /></div>
-            <small>{note}</small>
+            <small data-testid="report-note">{note}</small>
           </div>
           <div className={`report-chart ${config.chartType}`}>
-            {config.chartType === "line" ? <LineChart /> : <BarChart />}
+            {config.chartType === "line" ? <LineChart rows={rows} metric={chartMetric} /> : <BarChart rows={rows} metric={chartMetric} />}
             <div className="legend"><span><i className="legend-line value" />{rows[0]?.breakdown ?? "结果 A"}</span><span><i className="legend-line spend" />{rows[1]?.breakdown ?? "结果 B"}</span></div>
           </div>
           <div className="report-table">
@@ -263,7 +279,7 @@ export function ReportsPage({
               {resultColumns.map((column) => <span key={column}>{column}</span>)}
             </div>
             {rows.slice(0, 8).map((row) => (
-              <div className="report-row" key={`${row.date}-${row.breakdown}`} style={{ gridTemplateColumns: rowTemplate }}>
+              <div className="report-row" data-testid="report-row" key={`${row.date}-${row.breakdown}`} style={{ gridTemplateColumns: rowTemplate }}>
                 <span>{row.date}</span>
                 <span>{row.breakdown}</span>
                 {config.metrics.map((metric) => metric === "roas" ? <strong key={metric}>{row[metric]}</strong> : <span key={metric}>{row[metric]}</span>)}
@@ -290,12 +306,15 @@ export function ReportsPage({
 }
 
 function buildReportRows(config: ReportConfig): ReportRow[] {
-  const dayCount = config.dateRange === "近 7 天" ? 4 : config.dateRange === "近 14 天" ? 6 : 8;
+  const dayCount = config.granularity === "按月" ? 1 : config.granularity === "按周" ? (config.dateRange === "近 30 天" ? 4 : 2) : config.dateRange === "近 7 天" ? 4 : config.dateRange === "近 14 天" ? 6 : 8;
   const groups = breakdownGroups(config.breakdowns);
   const levelFactor = config.level === "Campaign" ? 1.32 : config.level === "Ad Set" ? 1.12 : 1;
   const filterFactor = config.filter === "ROAS 小于 1.5" ? 0.58 : config.filter === "花费大于 100000" ? 1.24 : 1;
+  const accountFactor = config.account === "Glow US DTC" ? 0.73 : 1;
+  const attributionFactor = config.attribution === "7-day click" ? 0.94 : config.attribution === "1-day click" ? 0.82 : 1;
+  const compareFactor = config.compareRange === "去年同期" ? 1.16 : config.compareRange === "不对比" ? 0.97 : 1;
   return Array.from({ length: dayCount }, (_, dayIndex) => groups.map((group, groupIndex) => {
-    const base = (dayIndex + 4) * (groupIndex + 2) * levelFactor * filterFactor;
+    const base = (dayIndex + 4) * (groupIndex + 2) * levelFactor * filterFactor * accountFactor * attributionFactor * compareFactor;
     const spend = Math.round(base * 28500);
     const impressions = Math.round(base * 9200);
     const clicks = Math.round(impressions * (0.018 + groupIndex * 0.006));
@@ -303,7 +322,7 @@ function buildReportRows(config: ReportConfig): ReportRow[] {
     const value = Math.round(purchases * (config.filter === "ROAS 小于 1.5" ? 18000 : 42000));
     const roas = spend > 0 ? (value / spend).toFixed(2) : "0.00";
     return {
-      date: `2026-06-${String(25 - dayIndex).padStart(2, "0")}`,
+      date: config.granularity === "按月" ? "2026-06" : config.granularity === "按周" ? `2026-W${String(26 - dayIndex).padStart(2, "0")}` : `2026-06-${String(25 - dayIndex).padStart(2, "0")}`,
       breakdown: group,
       spend: `₩${spend.toLocaleString("en-US")}`,
       impressions: impressions.toLocaleString("en-US"),
@@ -330,7 +349,10 @@ function estimateSize(config: ReportConfig): string {
   return "较小 · 约 180 行";
 }
 
-function LineChart() {
+function LineChart({ rows, metric }: { rows: ReportRow[]; metric: MetricKey }) {
+  const groups = [...new Set(rows.map((row) => row.breakdown))].slice(0, 2);
+  const values = rows.map((row) => metricValue(row, metric));
+  const max = Math.max(...values, 1);
   return (
     <svg viewBox="0 0 800 220">
       <g className="grid-lines">
@@ -339,13 +361,16 @@ function LineChart() {
         <line x1="40" y1="135" x2="780" y2="135" />
         <line x1="40" y1="190" x2="780" y2="190" />
       </g>
-      <path className="report-line facebook" d="M42,162 C95,146 115,151 158,128 C210,101 238,116 280,91 C332,61 358,78 406,67 C452,55 488,78 530,53 C579,24 610,43 652,36 C704,25 742,34 778,22" />
-      <path className="report-line instagram" d="M42,179 C92,169 116,172 158,156 C208,135 236,145 280,128 C330,108 362,121 406,103 C454,88 486,105 530,84 C578,65 610,77 652,61 C704,49 742,53 778,42" />
+      {groups.map((group, index) => <path key={group} className={`report-line ${index === 0 ? "facebook" : "instagram"}`} d={linePath(rows.filter((row) => row.breakdown === group), metric, max)} />)}
     </svg>
   );
 }
 
-function BarChart() {
+function BarChart({ rows, metric }: { rows: ReportRow[]; metric: MetricKey }) {
+  const groups = [...new Set(rows.map((row) => row.breakdown))].slice(0, 2);
+  const values = rows.map((row) => metricValue(row, metric));
+  const max = Math.max(...values, 1);
+  const sample = rows.slice(0, 8);
   return (
     <svg viewBox="0 0 800 220">
       <g className="grid-lines">
@@ -353,12 +378,28 @@ function BarChart() {
         <line x1="40" y1="96" x2="780" y2="96" />
         <line x1="40" y1="152" x2="780" y2="152" />
       </g>
-      {[0, 1, 2, 3, 4, 5, 6].map((index) => (
-        <g key={index}>
-          <rect className="report-bar facebook" x={68 + index * 96} y={60 - index * 3} width="30" height={130 + index * 3} rx="5" />
-          <rect className="report-bar instagram" x={103 + index * 96} y={88 - index * 5} width="30" height={102 + index * 5} rx="5" />
+      {sample.map((row, index) => {
+        const height = Math.max(12, (metricValue(row, metric) / max) * 150);
+        const groupIndex = groups.indexOf(row.breakdown);
+        return (
+        <g key={`${row.date}-${row.breakdown}`}>
+          <rect className={`report-bar ${groupIndex === 0 ? "facebook" : "instagram"}`} x={68 + Math.floor(index / Math.max(1, groups.length)) * 96 + groupIndex * 35} y={190 - height} width="30" height={height} rx="5" />
         </g>
-      ))}
+        );
+      })}
     </svg>
   );
+}
+
+function metricValue(row: ReportRow, metric: MetricKey): number {
+  return Number(row[metric].replace(/[^\d.-]/g, "")) || 0;
+}
+
+function linePath(rows: ReportRow[], metric: MetricKey, max: number): string {
+  if (rows.length === 0) return "";
+  return rows.map((row, index) => {
+    const x = 42 + index * (736 / Math.max(1, rows.length - 1));
+    const y = 190 - (metricValue(row, metric) / max) * 165;
+    return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
 }

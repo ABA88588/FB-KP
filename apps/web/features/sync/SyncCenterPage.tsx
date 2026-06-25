@@ -6,6 +6,7 @@ import type { DataState } from "@adflow/shared";
 import { cn } from "@adflow/shared";
 import { demoProvider, type SyncJob } from "@adflow/meta-client";
 import type { ToastKind } from "@/lib/app-types";
+import { useDemoContext } from "@/lib/demo-context";
 import { Button, PageHeader, StateGate, StatusDot } from "@/components/ui";
 
 const tabs = ["同步任务", "API 错误", "数据新鲜度", "审计日志"] as const;
@@ -17,6 +18,7 @@ export function SyncCenterPage({
   dataState: DataState;
   showToast: (text: string, kind?: ToastKind) => void;
 }) {
+  const { account, accountLabel, dateLabel, touchDemoData } = useDemoContext();
   const [tab, setTab] = useState<(typeof tabs)[number]>("同步任务");
   const [version, setVersion] = useState(0);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
@@ -47,6 +49,7 @@ export function SyncCenterPage({
     ].forEach((step) => {
       window.setTimeout(() => {
         demoProvider.updateSyncJob(job.id, step);
+        if ("status" in step && step.status === "success") touchDemoData();
         setVersion((current) => current + 1);
       }, step.delay);
     });
@@ -63,7 +66,7 @@ export function SyncCenterPage({
       <PageHeader
         eyebrow="系统状态"
         title="同步与错误"
-        description={`跟踪后台任务、API 错误和数据新鲜度 · 最近检查 ${checkedAt}`}
+        description={`${accountLabel} · ${dateLabel} · 最近检查 ${checkedAt}`}
         actions={
           <>
             <Button onClick={checkConnection}>重新检查连接</Button>
@@ -87,7 +90,7 @@ export function SyncCenterPage({
           <article><span>等待中</span><strong>{summary.queued}</strong></article>
           <article><span>失败</span><strong className="danger-text">{summary.failed}</strong></article>
         </div>
-        {tab === "同步任务" || tab === "API 错误" ? <SyncTable jobs={visibleJobs} selectedJobId={selectedJobId} onSelect={setSelectedJobId} /> : null}
+        {tab === "同步任务" || tab === "API 错误" ? <SyncTable jobs={visibleJobs} accountName={account.name} selectedJobId={selectedJobId} onSelect={setSelectedJobId} /> : null}
         {tab === "数据新鲜度" ? <FreshnessPanel /> : null}
         {tab === "审计日志" ? <AuditPanel /> : null}
         {detailJob?.error ? <ErrorDetail job={detailJob} onFocus={() => { setTab("API 错误"); setSelectedJobId(detailJob.id); }} /> : null}
@@ -96,17 +99,17 @@ export function SyncCenterPage({
   );
 }
 
-function SyncTable({ jobs, selectedJobId, onSelect }: { jobs: SyncJob[]; selectedJobId: string | null; onSelect: (id: string) => void }) {
+function SyncTable({ jobs, accountName, selectedJobId, onSelect }: { jobs: SyncJob[]; accountName: string; selectedJobId: string | null; onSelect: (id: string) => void }) {
   return (
     <div className="sync-table">
       <div className="sync-row head">
         <span>类型</span><span>广告账户</span><span>状态</span><span>进度</span><span>开始时间</span><span>结束时间</span><span>重试次数</span><span>错误</span><span>requestId</span>
       </div>
       {jobs.map((job) => (
-        <button className={cn("sync-row extended", job.status === "failed" && "error-row", selectedJobId === job.id && "selected")} key={job.id} type="button" onClick={() => onSelect(job.id)}>
+        <button data-testid="sync-job-row" className={cn("sync-row extended", job.status === "failed" && "error-row", selectedJobId === job.id && "selected")} key={job.id} type="button" onClick={() => onSelect(job.id)}>
           <span><strong>{job.type}</strong><small>meta-sync / {job.id}</small></span>
-          <span>Seoul Beauty KR</span>
-          <span><StatusDot tone={jobTone(job.status)} />{job.status === "running" ? "运行中" : job.status === "success" ? "成功" : job.status === "partial" ? "部分失败" : "失败"}</span>
+          <span>{accountName}</span>
+          <span><StatusDot tone={jobTone(job.status)} />{jobStatusLabel(job.status)}</span>
           <span>{job.status === "running" ? <><div className="mini-progress"><i style={{ width: job.progress }} /></div>{job.progress}</> : job.progress}</span>
           <span>{job.startedAt}</span>
           <span>{job.status === "running" ? "—" : job.elapsed}</span>
@@ -166,4 +169,12 @@ function jobTone(status: SyncJob["status"]): "success" | "warning" | "danger" | 
   if (status === "running" || status === "queued") return "info";
   if (status === "partial") return "warning";
   return "danger";
+}
+
+function jobStatusLabel(status: SyncJob["status"]): string {
+  if (status === "running") return "运行中";
+  if (status === "success") return "成功";
+  if (status === "partial") return "部分失败";
+  if (status === "queued") return "等待中";
+  return "失败";
 }

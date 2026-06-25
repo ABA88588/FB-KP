@@ -71,7 +71,7 @@ export function PageHeader({
 
 export function KpiCard({ metric }: { metric: KpiMetric }) {
   return (
-    <article className={cn("metric-card", metric.accent && "accent")}>
+    <article className={cn("metric-card", metric.accent && "accent")} data-testid="kpi-card">
       <div className="metric-label">
         {metric.label} <Info size={13} aria-hidden="true" />
       </div>

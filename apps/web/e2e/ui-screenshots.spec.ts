@@ -4,8 +4,8 @@ import { expect, test } from "@playwright/test";
 const outputDir = "../../test-results/ui";
 const screenshotOptions = {
   animations: "disabled" as const,
-  maxDiffPixelRatio: 0.3,
-  threshold: 0.35
+  maxDiffPixelRatio: 0.03,
+  threshold: 0.2
 };
 
 test.describe("UI reference screenshots", () => {

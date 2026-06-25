@@ -1,11 +1,12 @@
 import { rowsToCsv } from "@adflow/shared";
 import { demoAccounts, entityRows, kpiMetrics, reportRows, syncJobs } from "./demo-data";
-import type { AdAccount, CampaignEntity, EntityLevel, KpiMetric, ReportRow, SyncJob } from "./types";
+import type { AdAccount, CampaignEntity, CreatedAdBundle, CreateAdDraftInput, DemoQueryContext, EntityLevel, KpiMetric, ReportRow, SyncJob, UpdateEntityInput } from "./types";
 
 export class DemoMetaAdsProvider {
   readonly mode = "demo" as const;
   #entities: Record<EntityLevel, CampaignEntity[]>;
   #syncJobs: SyncJob[];
+  #creatives: Array<{ id: string; name: string; assetFile: string; status: "paused" }>;
   #entitySequence = 9000;
   #syncSequence = 1;
 
@@ -16,19 +17,27 @@ export class DemoMetaAdsProvider {
       ad: entityRows.ad.map((row) => ({ ...row }))
     };
     this.#syncJobs = syncJobs.map((job) => (job.error ? { ...job, error: { ...job.error } } : { ...job }));
+    this.#creatives = [];
   }
 
   listAdAccounts(): AdAccount[] {
     return demoAccounts;
   }
 
-  getKpis(): KpiMetric[] {
-    return kpiMetrics;
+  getKpis(context?: DemoQueryContext): KpiMetric[] {
+    const factor = contextFactor(context);
+    return kpiMetrics.map((metric) => ({
+      ...metric,
+      value: scaleDisplayValue(metric.value, factor),
+      delta: scalePercent(metric.delta, context?.compareRange)
+    }));
   }
 
-  listEntities(level: EntityLevel, query = ""): CampaignEntity[] {
+  listEntities(level: EntityLevel, query = "", context?: DemoQueryContext): CampaignEntity[] {
     const normalized = query.trim().toLowerCase();
-    return this.#entities[level].filter((row) => `${row.name} ${row.id}`.toLowerCase().includes(normalized));
+    return this.#entities[level]
+      .filter((row) => `${row.name} ${row.id}`.toLowerCase().includes(normalized))
+      .map((row) => withContext(row, context));
   }
 
   updateStatus(level: EntityLevel, ids: string[], status: "active" | "paused"): CampaignEntity[] {
@@ -48,6 +57,73 @@ export class DemoMetaAdsProvider {
         : row
     );
     return this.#entities[level];
+  }
+
+  updateEntity(level: EntityLevel, id: string, input: UpdateEntityInput): CampaignEntity | null {
+    const amount = Number(input.budget.replace(/[^\d.-]/g, ""));
+    const formattedBudget = amount > 0 ? `₩${Math.round(amount).toLocaleString("en-US")} / 日` : input.budget;
+    let updated: CampaignEntity | null = null;
+    this.#entities[level] = this.#entities[level].map((row) => {
+      if (row.id !== id) return row;
+      updated = {
+        ...row,
+        name: input.name,
+        status: input.status,
+        effective: input.status === "active" ? "投放中" : "已暂停",
+        budget: level === "ad" ? `广告组预算 · ${formattedBudget}` : formattedBudget,
+        updated: "刚刚"
+      };
+      return updated;
+    });
+    return updated;
+  }
+
+  createAdBundle(input: CreateAdDraftInput): CreatedAdBundle {
+    const campaignId = this.#nextId("238499");
+    const adSetId = this.#nextId("238509");
+    const creativeId = this.#nextId("cr_demo_");
+    const adId = this.#nextId("238519");
+    const budgetValue = Number(input.budget.replace(/[^\d.-]/g, "")) || 100000;
+    const budget = `₩${budgetValue.toLocaleString("en-US")} / 日`;
+
+    const campaign: CampaignEntity = {
+      id: campaignId,
+      level: "campaign",
+      name: input.campaignName,
+      status: "paused",
+      effective: "已暂停",
+      budget,
+      spend: "₩0",
+      purchases: "—",
+      cpa: "—",
+      value: "—",
+      roas: "—",
+      impressions: "—",
+      ctr: "—",
+      cpc: "—",
+      updated: "刚刚"
+    };
+    const adSet: CampaignEntity = {
+      ...campaign,
+      id: adSetId,
+      level: "adset",
+      name: `${input.audience}｜${input.event}`,
+      budget
+    };
+    const ad: CampaignEntity = {
+      ...campaign,
+      id: adId,
+      level: "ad",
+      name: input.title,
+      budget: `广告组预算 · ${budget}`
+    };
+
+    this.#entities.campaign = [campaign, ...this.#entities.campaign];
+    this.#entities.adset = [adSet, ...this.#entities.adset];
+    this.#entities.ad = [ad, ...this.#entities.ad];
+    this.#creatives = [{ id: creativeId, name: input.title, assetFile: input.assetFile, status: "paused" }, ...this.#creatives];
+
+    return { campaignId, adSetId, creativeId, adId };
   }
 
   duplicateEntities(level: EntityLevel, ids: string[]): CampaignEntity[] {
@@ -131,6 +207,61 @@ export class DemoMetaAdsProvider {
     this.#syncJobs = this.#syncJobs.map((job) => (job.id === id ? { ...job, ...patch } : job));
     return this.#syncJobs;
   }
+
+  #nextId(prefix: string): string {
+    this.#entitySequence += 1;
+    return `${prefix}${this.#entitySequence}`;
+  }
 }
 
 export const demoProvider = new DemoMetaAdsProvider();
+
+function contextFactor(context?: DemoQueryContext): number {
+  const accountFactor = context?.accountId?.endsWith("7712") ? 0.74 : 1;
+  const dateFactor = context?.dateRange === "近 30 天" ? 3.9 : context?.dateRange === "近 14 天" ? 1.85 : 1;
+  const compareFactor = context?.compareRange === "去年同期" ? 1.12 : context?.compareRange === "不对比" ? 0.96 : 1;
+  return accountFactor * dateFactor * compareFactor;
+}
+
+function withContext(row: CampaignEntity, context?: DemoQueryContext): CampaignEntity {
+  const factor = contextFactor(context);
+  if (factor === 1) return { ...row };
+  return {
+    ...row,
+    spend: scaleDisplayValue(row.spend, factor),
+    purchases: scaleIntegerDisplay(row.purchases, factor),
+    cpa: scaleDisplayValue(row.cpa, factor > 1 ? 0.94 : 1.08),
+    value: scaleDisplayValue(row.value, factor * (factor > 1 ? 1.04 : 0.97)),
+    roas: scaleRoas(row.roas, factor),
+    impressions: scaleIntegerDisplay(row.impressions, factor),
+    cpc: scaleDisplayValue(row.cpc, factor > 1 ? 0.92 : 1.05)
+  };
+}
+
+function scaleDisplayValue(value: string, factor: number): string {
+  const numeric = Number(value.replace(/[^\d.-]/g, ""));
+  if (!Number.isFinite(numeric) || numeric === 0) return value;
+  const scaled = Math.round(numeric * factor);
+  if (value.includes("₩")) return `₩${scaled.toLocaleString("en-US")}`;
+  if (value.endsWith("M")) return `${(Number(value.replace("M", "")) * factor).toFixed(2)}M`;
+  return scaled.toLocaleString("en-US");
+}
+
+function scaleIntegerDisplay(value: string, factor: number): string {
+  const numeric = Number(value.replace(/[^\d.-]/g, ""));
+  if (!Number.isFinite(numeric) || numeric === 0) return value;
+  return Math.max(1, Math.round(numeric * factor)).toLocaleString("en-US");
+}
+
+function scaleRoas(value: string, factor: number): string {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return value;
+  return (numeric * (factor > 1 ? 1.03 : 0.96)).toFixed(2);
+}
+
+function scalePercent(value: string, compareRange?: DemoQueryContext["compareRange"]): string {
+  const numeric = Number(value.replace(/[^\d.-]/g, ""));
+  if (!Number.isFinite(numeric)) return value;
+  const factor = compareRange === "去年同期" ? 0.72 : compareRange === "不对比" ? 0 : 1;
+  return `${(numeric * factor).toFixed(1)}%`;
+}

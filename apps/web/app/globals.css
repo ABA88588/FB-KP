@@ -295,6 +295,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .drawer-chart path { fill: none; stroke: var(--primary); stroke-width: 3; stroke-linecap: round; }
 .drawer-footer { position: absolute; inset: auto 0 0; display: flex; height: 64px; align-items: center; justify-content: flex-end; gap: 7px; padding: 0 16px; background: white; border-top: 1px solid var(--border); }
 .drawer-edit-note { padding: 9px 12px; color: var(--primary); font-size: 10.5px; background: var(--selected); border-bottom: 1px solid #bfdbfe; }
+.drawer-edit-form { display: grid; gap: 10px; padding: 10px; margin-bottom: 12px; background: var(--surface-subtle); border: 1px solid var(--border); border-radius: 8px; }
+.drawer-edit-form label { display: grid; gap: 5px; color: var(--muted); font-size: 10px; font-weight: 700; }
+.drawer-edit-form input, .drawer-edit-form select { width: 100%; height: 34px; padding: 0 10px; color: var(--text); background: white; border: 1px solid var(--border); border-radius: 6px; }
+.drawer-edit-form > div { display: flex; justify-content: flex-end; gap: 8px; }
 .success-text { color: var(--success) !important; }
 .danger-text { color: var(--danger) !important; }
 .warning-text { color: var(--warning) !important; }

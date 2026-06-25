@@ -69,3 +69,32 @@ export type ReportRow = {
   purchases: string;
   roas: string;
 };
+
+export type DemoQueryContext = {
+  accountId?: string;
+  dateRange?: "近 7 天" | "近 14 天" | "近 30 天";
+  compareRange?: "上一周期" | "去年同期" | "不对比";
+};
+
+export type CreateAdDraftInput = {
+  campaignName: string;
+  objective: string;
+  budget: string;
+  audience: string;
+  event: string;
+  title: string;
+  assetFile: string;
+};
+
+export type CreatedAdBundle = {
+  campaignId: string;
+  adSetId: string;
+  creativeId: string;
+  adId: string;
+};
+
+export type UpdateEntityInput = {
+  name: string;
+  status: ConfiguredStatus;
+  budget: string;
+};

@@ -7,6 +7,7 @@ import type { DataState } from "@adflow/shared";
 import { cn, rowsToCsv } from "@adflow/shared";
 import { demoProvider, type CampaignEntity, type EntityLevel } from "@adflow/meta-client";
 import type { ToastKind } from "@/lib/app-types";
+import { useDemoContext } from "@/lib/demo-context";
 import { Button, ConfirmDialog, PageHeader, StateGate, StatusBadge } from "@/components/ui";
 import { DetailDrawer } from "./DetailDrawer";
 
@@ -40,6 +41,7 @@ export function CampaignManager({
   showToast: (text: string, kind?: ToastKind) => void;
 }) {
   const router = useRouter();
+  const { accountLabel, dateLabel, queryContext, revision, touchDemoData } = useDemoContext();
   const [level, setLevel] = useState<EntityLevel>("campaign");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "paused">("active");
@@ -63,6 +65,9 @@ export function CampaignManager({
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const requested = params.get("level");
+    const requestedQuery = params.get("q");
+    const requestedStatus = params.get("status");
+    const requestedMin = params.get("minSpend");
     const savedView = loadSavedView();
     if (requested === "adset" || requested === "ad" || requested === "campaign") {
       setLevel(requested);
@@ -77,8 +82,11 @@ export function CampaignManager({
       setSortDirection(savedView.sortDirection);
       if (savedView.visibleColumns.length > 0) setVisibleColumns(savedView.visibleColumns);
       setViewSavedAt(savedView.savedAt);
-      return;
     }
+    if (requestedQuery) setQuery(requestedQuery);
+    if (requestedStatus === "all" || requestedStatus === "active" || requestedStatus === "paused") setStatusFilter(requestedStatus);
+    if (requestedMin !== null) setMinSpend(requestedMin);
+    if (savedView) return;
     const savedColumns = window.localStorage.getItem("adflow.savedColumns");
     if (savedColumns) {
       const parsed = savedColumns.split(",").filter((item): item is ColumnId => item in columnLabels);
@@ -89,13 +97,19 @@ export function CampaignManager({
   const rows = useMemo(() => {
     const minSpendValue = Number(minSpend || 0);
     const filtered = demoProvider
-      .listEntities(level, query)
+      .listEntities(level, query, queryContext)
       .filter((row) => statusFilter === "all" || row.status === statusFilter)
       .filter((row) => !minSpendValue || parseMoney(row.spend) >= minSpendValue)
       .filter((row) => !warningOnly || Boolean(row.warning));
     const sorted = [...filtered].sort((a, b) => parseMoney(a.spend) - parseMoney(b.spend));
     return sortDirection === "desc" ? sorted.reverse() : sorted;
-  }, [dataVersion, level, minSpend, query, statusFilter, sortDirection, warningOnly]);
+  }, [dataVersion, level, minSpend, query, queryContext, revision, statusFilter, sortDirection, warningOnly]);
+
+  const counts = useMemo(() => ({
+    campaign: demoProvider.listEntities("campaign", "", queryContext).length,
+    adset: demoProvider.listEntities("adset", "", queryContext).length,
+    ad: demoProvider.listEntities("ad", "", queryContext).length
+  }), [dataVersion, queryContext, revision]);
 
   const pageSize = 10;
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
@@ -127,6 +141,7 @@ export function CampaignManager({
   const runStatusChange = (ids: string[], status: "active" | "paused") => {
     demoProvider.updateStatus(level, ids, status);
     setDataVersion((version) => version + 1);
+    touchDemoData();
     setSelectedIds(new Set());
     setConfirm(null);
     showToast(`演示模式已${status === "active" ? "启用" : "暂停"} ${ids.length} 项，本地数据已更新`, "success");
@@ -149,6 +164,7 @@ export function CampaignManager({
     }
     demoProvider.updateBudget(level, budgetDialog.ids, Math.round(amount));
     setDataVersion((version) => version + 1);
+    touchDemoData();
     setSelectedIds(new Set());
     setBudgetDialog(null);
     showToast(`已更新 ${budgetDialog.ids.length} 项预算，本地 Demo 数据已变化`, "success");
@@ -157,6 +173,7 @@ export function CampaignManager({
   const duplicateRows = (ids: string[]) => {
     const copies = demoProvider.duplicateEntities(level, ids);
     setDataVersion((version) => version + 1);
+    touchDemoData();
     setSelectedIds(new Set(copies.map((row) => row.id)));
     setBulkMoreOpen(false);
     setRowMenuId(null);
@@ -167,6 +184,7 @@ export function CampaignManager({
   const markRows = (ids: string[], warning: boolean) => {
     demoProvider.markEntities(level, ids, warning);
     setDataVersion((version) => version + 1);
+    touchDemoData();
     setBulkMoreOpen(false);
     setRowMenuId(null);
     showToast(warning ? "已标记为待检查" : "已取消待检查标记", "success");
@@ -175,6 +193,7 @@ export function CampaignManager({
   const touchRows = (ids: string[]) => {
     demoProvider.touchEntities(level, ids);
     setDataVersion((version) => version + 1);
+    touchDemoData();
     setBulkMoreOpen(false);
     setRowMenuId(null);
     showToast("已把更新时间设为刚刚", "success");
@@ -249,12 +268,26 @@ export function CampaignManager({
     showToast(`已下载 ${rows.length} 行 Campaign CSV`, "success");
   };
 
+  const saveEntity = (id: string, input: { name: string; status: "active" | "paused"; budget: string }) => {
+    const updated = demoProvider.updateEntity(level, id, input);
+    if (!updated) {
+      showToast("未找到对象，无法保存", "danger");
+      return null;
+    }
+    setDataVersion((version) => version + 1);
+    touchDemoData();
+    const [contextRow] = demoProvider.listEntities(level, updated.name, queryContext).filter((row) => row.id === id);
+    setDrawerEntity(contextRow ?? updated);
+    showToast("设置已保存，本地 Demo 数据已更新", "success");
+    return contextRow ?? updated;
+  };
+
   return (
     <StateGate state={dataState}>
       <PageHeader
-        eyebrow="广告账户 / Seoul Beauty KR"
+        eyebrow={accountLabel}
         title="广告管理"
-        description="对象更新于 8 分钟前 · Insights 更新于 6 分钟前"
+        description={`${dateLabel} · 对象更新于 8 分钟前 · Insights 更新于 6 分钟前`}
         actions={
           <>
             <Button onClick={() => router.push("/campaigns/new?step=1&source=import")}>导入草稿</Button>
@@ -264,9 +297,9 @@ export function CampaignManager({
       />
 
       <div className="entity-tabs" role="tablist">
-        <LevelTab active={level === "campaign"} label="广告系列" count="12" onClick={() => changeLevel("campaign")} />
-        <LevelTab active={level === "adset"} label="广告组" count="28" onClick={() => changeLevel("adset")} />
-        <LevelTab active={level === "ad"} label="广告" count="42" onClick={() => changeLevel("ad")} />
+        <LevelTab active={level === "campaign"} label="广告系列" count={String(counts.campaign)} onClick={() => changeLevel("campaign")} />
+        <LevelTab active={level === "adset"} label="广告组" count={String(counts.adset)} onClick={() => changeLevel("adset")} />
+        <LevelTab active={level === "ad"} label="广告" count={String(counts.ad)} onClick={() => changeLevel("ad")} />
       </div>
 
       <section className="table-panel">
@@ -389,7 +422,7 @@ export function CampaignManager({
             </thead>
             <tbody>
               {pageRows.map((row, index) => (
-                <tr key={row.id} className={selectedIds.has(row.id) ? "selected" : ""} onClick={() => setDrawerEntity(row)}>
+                <tr data-testid="campaign-row" key={row.id} className={selectedIds.has(row.id) ? "selected" : ""} onClick={() => setDrawerEntity(row)}>
                   <td className="check-col" onClick={(event) => event.stopPropagation()}>
                     <input aria-label={`选择 ${row.name}`} checked={selectedIds.has(row.id)} type="checkbox" onChange={(event) => toggleSelected(row.id, event.target.checked)} />
                   </td>
@@ -440,7 +473,7 @@ export function CampaignManager({
         </div>
       </section>
 
-      <DetailDrawer entity={drawerEntity} level={level} readOnly={dataState === "permission-denied" || dataState === "connection-expired"} onClose={() => setDrawerEntity(null)} onToast={(message) => showToast(message, "info")} />
+      <DetailDrawer entity={drawerEntity} level={level} readOnly={dataState === "permission-denied" || dataState === "connection-expired"} onClose={() => setDrawerEntity(null)} onSave={saveEntity} onToast={(message) => showToast(message, "info")} />
       <BudgetDialog
         open={Boolean(budgetDialog)}
         amount={budgetDialog?.amount ?? ""}

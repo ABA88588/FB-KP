@@ -7,6 +7,7 @@ import type { DataState } from "@adflow/shared";
 import { demoProvider } from "@adflow/meta-client";
 import type { ToastKind } from "@/lib/app-types";
 import { Button, HealthPanel, KpiCard, PageHeader, StateGate, StatusDot, TrendChart } from "@/components/ui";
+import { useDemoContext } from "@/lib/demo-context";
 
 export function OverviewPage({
   dataState,
@@ -16,9 +17,11 @@ export function OverviewPage({
   showToast: (text: string, kind?: ToastKind) => void;
 }) {
   const router = useRouter();
-  const kpis = demoProvider.getKpis();
-  const topRows = demoProvider.listEntities("campaign").slice(0, 5);
+  const { accountLabel, dateLabel, queryContext, revision } = useDemoContext();
+  const kpis = demoProvider.getKpis(queryContext);
+  const topRows = demoProvider.listEntities("campaign", "", queryContext).slice(0, 5);
   const [snapshotSavedAt, setSnapshotSavedAt] = useState<string | null>(null);
+  void revision;
 
   const saveSnapshot = () => {
     const savedAt = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
@@ -30,9 +33,9 @@ export function OverviewPage({
   return (
     <StateGate state={dataState}>
       <PageHeader
-        eyebrow="广告账户 / Seoul Beauty KR"
+        eyebrow={accountLabel}
         title="广告总览"
-        description={`2026年6月19日–6月25日 · Asia/Seoul · ${snapshotSavedAt ? `快照保存于 ${snapshotSavedAt}` : "报表更新于 6 分钟前"}`}
+        description={`${dateLabel} · ${snapshotSavedAt ? `快照保存于 ${snapshotSavedAt}` : "报表更新于 6 分钟前"}`}
         actions={
           <>
             <Button onClick={saveSnapshot}>保存快照</Button>

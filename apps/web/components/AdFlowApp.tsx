@@ -11,6 +11,7 @@ import { ReportsPage } from "@/features/reports/ReportsPage";
 import { SyncCenterPage } from "@/features/sync/SyncCenterPage";
 import { CreativesPage } from "@/features/static/CreativesPage";
 import { SettingsPage } from "@/features/static/SettingsPage";
+import { DemoProvider } from "@/lib/demo-context";
 
 const validStates: DataState[] = [
   "idle",
@@ -45,7 +46,8 @@ export function AdFlowApp({ page }: { page: PageKey }) {
   const showToast = (text: string, kind: "info" | "success" | "warning" | "danger" = "info") => setToast({ text, kind });
 
   return (
-    <AppShell page={page} onToast={showToast}>
+    <DemoProvider>
+      <AppShell page={page} onToast={showToast}>
       {page === "overview" ? <OverviewPage dataState={dataState} showToast={showToast} /> : null}
       {page === "campaigns" ? <CampaignManager dataState={dataState} showToast={showToast} /> : null}
       {page === "campaigns-new" ? <CreateWizard showToast={showToast} /> : null}
@@ -56,6 +58,7 @@ export function AdFlowApp({ page }: { page: PageKey }) {
       <div className={`toast ${toast ? "visible" : ""} ${toast?.kind ?? "info"}`} role="status">
         {toast?.text}
       </div>
-    </AppShell>
+      </AppShell>
+    </DemoProvider>
   );
 }
