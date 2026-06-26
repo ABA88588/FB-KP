@@ -3,6 +3,10 @@
 FROM node:24-bookworm-slim AS deps
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV CI=true
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates openssl \
+  && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json prisma.config.ts ./
@@ -59,6 +63,10 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates openssl \
+  && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --system --gid 1001 nextjs \
   && useradd --system --uid 1001 --gid nextjs --home-dir /app nextjs

@@ -1,7 +1,7 @@
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "./generated/prisma/client.js";
+import { PrismaClient } from "./generated/prisma/client.ts";
 
-export { Prisma, type PrismaClient } from "./generated/prisma/client.js";
+export { Prisma, type PrismaClient } from "./generated/prisma/client.ts";
 
 type PrismaGlobal = typeof globalThis & {
   __adflowPrisma?: PrismaClient;

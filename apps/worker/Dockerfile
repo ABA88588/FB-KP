@@ -2,6 +2,10 @@
 
 FROM node:24-bookworm-slim AS deps
 WORKDIR /app
+ENV CI=true
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates openssl \
+  && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json prisma.config.ts ./
@@ -26,6 +30,10 @@ FROM node:24-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV WORKER_HEARTBEAT_PATH=/tmp/fbkp-worker-heartbeat.json
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates openssl \
+  && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --system --gid 1002 worker \
   && useradd --system --uid 1002 --gid worker --home-dir /app worker \
