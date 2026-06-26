@@ -1,5 +1,6 @@
 import { rowsToCsv } from "@adflow/shared";
 import { defaultAccountId, demoAccounts, entityRows, kpiMetrics, reportRows, syncJobs, usAccountId, type SeedCampaignEntity } from "./demo-data";
+import type { MetaAdsProvider, MetaProviderAvailability } from "./provider";
 import type { AdAccount, CampaignEntity, CreativeAsset, CreatedAdBundle, CreateAdDraftInput, DemoQueryContext, EntityLevel, KpiMetric, ReportRow, SyncJob, UpdateEntityInput } from "./types";
 
 const baseCreatives: Array<Omit<CreativeAsset, "accountId">> = [
@@ -10,7 +11,7 @@ const baseCreatives: Array<Omit<CreativeAsset, "accountId">> = [
   { id: "asset-5", title: "BEAUTY SET", file: "beauty_set.jpg", type: "图片", usage: 6, recent: 1, thumb: 5, status: "active" }
 ];
 
-export class DemoMetaAdsProvider {
+export class DemoMetaAdsProvider implements MetaAdsProvider {
   readonly mode = "demo" as const;
   #entities: Record<EntityLevel, CampaignEntity[]>;
   #syncJobs: SyncJob[];
@@ -57,6 +58,15 @@ export class DemoMetaAdsProvider {
         usage: Math.max(0, creative.usage - 1)
       }))
     ];
+  }
+
+  getAvailability(): MetaProviderAvailability {
+    return {
+      mode: "demo",
+      configured: true,
+      disabled: false,
+      status: "configured"
+    };
   }
 
   listAdAccounts(): AdAccount[] {

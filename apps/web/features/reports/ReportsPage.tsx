@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { DataState } from "@adflow/shared";
 import { rowsToCsv } from "@adflow/shared";
 import type { ToastKind } from "@/lib/app-types";
-import { Button, PageHeader, StateGate } from "@/components/ui";
+import { Button, DataSourceGate, LiveEmptyState, PageHeader, StateGate } from "@/components/ui";
 import { useDemoContext, type CompareRange } from "@/lib/demo-context";
 import { useAppRuntime } from "@/lib/app-runtime";
 
@@ -91,14 +91,14 @@ export function ReportsPage({
   const runtime = useAppRuntime();
   const dataState = providedDataState ?? runtime.dataState;
   const showToast = providedShowToast ?? runtime.showToast;
-  const { account, accountLabel, dateRange, compareRange } = useDemoContext();
+  const { connection, account, accountLabel, dateRange, compareRange } = useDemoContext();
   const [config, setConfig] = useState<ReportConfig>(baseConfig);
   const [presets, setPresets] = useState<Preset[]>(initialPresets);
   const [presetPanelOpen, setPresetPanelOpen] = useState(true);
   const [metricsOpen, setMetricsOpen] = useState(false);
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState(initialPresets[0]?.name ?? "近 30 天 Ad 平台效果");
-  const [rows, setRows] = useState<ReportRow[]>(() => buildReportRows(baseConfig));
+  const [rows, setRows] = useState<ReportRow[]>(() => connection.mode === "live" ? [] : buildReportRows(baseConfig));
   const [progress, setProgress] = useState(100);
   const [stage, setStage] = useState("异步报表已完成");
   const [note, setNote] = useState("640 行 · 生成于 2 分钟前");
@@ -109,6 +109,13 @@ export function ReportsPage({
   const chartMetric = config.metrics[0] ?? "spend";
 
   useEffect(() => {
+    if (connection.mode === "live") {
+      setRows([]);
+      setStage("Live report adapter skeleton");
+      setProgress(0);
+      setNote("Live mode does not use generated Demo report rows.");
+      return;
+    }
     setConfig((current) => {
       const next = { ...current, account: account.name, currency: account.currency, dateRange, compareRange };
       if (
@@ -125,7 +132,7 @@ export function ReportsPage({
       setNote(`${next.account} · ${next.dateRange} · ${next.compareRange} · ${estimateSize(next)}`);
       return next;
     });
-  }, [account.currency, account.name, compareRange, dateRange]);
+  }, [account.currency, account.name, compareRange, connection.mode, dateRange]);
 
   const updateConfig = (patch: Partial<ReportConfig>) => {
     setConfig((current) => ({ ...current, ...patch }));
@@ -150,6 +157,14 @@ export function ReportsPage({
   };
 
   const runReport = () => {
+    if (connection.mode === "live") {
+      setRows([]);
+      setProgress(0);
+      setStage("Live report adapter skeleton");
+      setNote("No Live report endpoint is wired in the client adapter skeleton.");
+      showToast("Live report adapter skeleton has no rows to display.", "warning");
+      return;
+    }
     if (config.metrics.length === 0) {
       showToast("至少选择 1 个指标", "warning");
       return;
@@ -201,6 +216,10 @@ export function ReportsPage({
   };
 
   const exportCsv = () => {
+    if (connection.mode === "live" && rows.length === 0) {
+      showToast("Live report adapter returned no rows to export.", "warning");
+      return;
+    }
     const csv = rowsToCsv([
       resultColumns,
       ...rows.map((row) => [
@@ -223,6 +242,7 @@ export function ReportsPage({
 
   return (
     <StateGate state={dataState}>
+      <DataSourceGate connection={connection}>
       <PageHeader
         className="report-header"
         eyebrow={accountLabel}
@@ -236,6 +256,10 @@ export function ReportsPage({
         }
       />
 
+      {connection.mode === "live" && rows.length === 0 ? (
+        <LiveEmptyState title="Live report data is not available" detail="The Live client adapter returned no report rows, so generated Demo report data is hidden." />
+      ) : (
+        <>
       <div className="report-layout three">
         <aside className="report-builder panel">
           <div className="builder-heading"><h2>查询配置</h2><span>{selectedPreset}</span></div>
@@ -327,6 +351,9 @@ export function ReportsPage({
           </aside>
         ) : null}
       </div>
+        </>
+      )}
+      </DataSourceGate>
     </StateGate>
   );
 }

@@ -3,11 +3,12 @@
 import { Check, ChevronLeft, ChevronRight, Save, Send, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { demoProvider, type AdAccount, type CreatedAdBundle } from "@adflow/meta-client";
-import { Button } from "@/components/ui";
+import type { AdAccount, CreatedAdBundle } from "@adflow/meta-client";
+import { Button, ConnectionStateNotice, DataSourceGate, LiveEmptyState } from "@/components/ui";
 import type { ToastKind } from "@/lib/app-types";
 import { useDemoContext } from "@/lib/demo-context";
 import { useAppRuntime } from "@/lib/app-runtime";
+import { writeBlockedMessage, type ClientApiConnection } from "@/lib/client-api-adapter";
 
 type WizardStep = 1 | 2 | 3 | 4;
 
@@ -78,7 +79,7 @@ export function CreateWizard({ showToast: providedShowToast }: { showToast?: (te
   const router = useRouter();
   const runtime = useAppRuntime();
   const showToast = providedShowToast ?? runtime.showToast;
-  const { account, accountLabel, touchDemoData } = useDemoContext();
+  const { api, connection, account, accountLabel, touchDemoData } = useDemoContext();
   const draftStorageKey = useMemo(() => createDraftKey(account.id), [account.id]);
   const [step, setStep] = useState<WizardStep>(1);
   const [draft, setDraft] = useState<Draft>(() => initialDraftForAccount(account));
@@ -142,7 +143,11 @@ export function CreateWizard({ showToast: providedShowToast }: { showToast?: (te
       return;
     }
     const asset = creativeAssets.find((item) => item.id === draft.assetId) ?? creativeAssets[0];
-    const ids = demoProvider.createAdBundle(account.id, {
+    if (!connection.canWrite) {
+      showToast(writeBlockedMessage(connection), "warning");
+      return;
+    }
+    const ids = api.createAdBundle(account.id, {
       campaignName: draft.campaignName,
       objective: draft.objective,
       budget: draft.budget,
@@ -151,11 +156,15 @@ export function CreateWizard({ showToast: providedShowToast }: { showToast?: (te
       title: draft.title,
       assetFile: asset.file
     });
+    if (!ids.campaignId) {
+      showToast("Live write adapter is not connected.", "warning");
+      return;
+    }
     setPublished(true);
     setPublishedIds(ids);
     touchDemoData();
     window.localStorage.setItem(`adflow.lastPublishedBundle.${account.id}`, JSON.stringify(ids));
-    showToast(`模拟发布成功：Campaign ${ids.campaignId}，Ad ${ids.adId} 已写入 DemoProvider`, "success");
+    showToast(connection.mode === "demo" ? `模拟发布成功：Campaign ${ids.campaignId}，Ad ${ids.adId} 已写入 DemoProvider` : `Live 发布请求已提交：Campaign ${ids.campaignId}，Ad ${ids.adId}`, "success");
     window.setTimeout(() => router.push(`/campaigns?level=campaign&q=${encodeURIComponent(draft.campaignName)}&status=all&minSpend=0`), 500);
   };
 
@@ -183,22 +192,39 @@ export function CreateWizard({ showToast: providedShowToast }: { showToast?: (te
       <WizardStepper step={step} setStep={(nextStep) => { setStep(nextStep); router.replace(`/campaigns/new?step=${nextStep}`); }} />
 
       <div className="wizard-body inline">
+        {connection.mode === "live" ? (
+          <div className="wizard-live-state">
+            <DataSourceGate connection={connection}>
+              <LiveEmptyState title="Live create flow is not available" detail="The Live client adapter skeleton has no create workflow wired, so Demo campaign drafts and previews are hidden." />
+            </DataSourceGate>
+          </div>
+        ) : (
+          <>
         <div className="wizard-form">
+          <ConnectionStateNotice connection={connection} />
           {step === 1 ? <CampaignStep draft={draft} updateDraft={updateDraft} /> : null}
           {step === 2 ? <AdSetStep draft={draft} updateDraft={updateDraft} /> : null}
           {step === 3 ? <CreativeStep draft={draft} updateDraft={updateDraft} /> : null}
-          {step === 4 ? <ReviewStep draft={draft} currency={account.currency} published={published} publishedIds={publishedIds} /> : null}
+          {step === 4 ? <ReviewStep draft={draft} currency={account.currency} connection={connection} published={published} publishedIds={publishedIds} /> : null}
         </div>
         <AdPreview account={account} draft={draft} updateDraft={updateDraft} />
+          </>
+        )}
       </div>
 
       <footer className="wizard-footer inline">
         <Button onClick={back}><ChevronLeft size={14} /> {step === 1 ? "取消" : "上一步"}</Button>
         <div>
-          <Button onClick={saveDraft}><Save size={14} /> 保存草稿</Button>
-          <Button variant="primary" onClick={next}>
-            {step < 4 ? <>下一步 <ChevronRight size={14} /></> : <><Send size={14} /> 模拟发布（不会写入 Meta）</>}
-          </Button>
+          {connection.mode === "live" ? (
+            <Button variant="primary" onClick={() => router.push("/settings/connections")}>连接设置</Button>
+          ) : (
+            <>
+              <Button onClick={saveDraft}><Save size={14} /> 保存草稿</Button>
+              <Button variant="primary" onClick={next}>
+                {step < 4 ? <>下一步 <ChevronRight size={14} /></> : <><Send size={14} /> 模拟发布（不会写入 Meta）</>}
+              </Button>
+            </>
+          )}
         </div>
       </footer>
     </section>
@@ -320,7 +346,7 @@ function CreativeStep({ draft, updateDraft }: { draft: Draft; updateDraft: (patc
   );
 }
 
-function ReviewStep({ draft, currency, published, publishedIds }: { draft: Draft; currency: AdAccount["currency"]; published: boolean; publishedIds: CreatedAdBundle | null }) {
+function ReviewStep({ draft, currency, connection, published, publishedIds }: { draft: Draft; currency: AdAccount["currency"]; connection: ClientApiConnection; published: boolean; publishedIds: CreatedAdBundle | null }) {
   return (
     <section className="wizard-pane active">
       <div className={published ? "review-alert published" : "review-alert"}>
@@ -333,7 +359,7 @@ function ReviewStep({ draft, currency, published, publishedIds }: { draft: Draft
       <ReviewCard title="Campaign" rows={[["名称", draft.campaignName], ["目标", draft.objective], ["特殊广告类别", draft.specialCategory], ["状态", "PAUSED"]]} />
       <ReviewCard title="Ad Set" rows={[["转化位置", draft.conversionLocation], ["优化事件", draft.event], ["日预算", formatCurrency(Number(draft.budget), currency)], ["受众", `${draft.audience} · ${draft.placement}`], ["归因窗口", draft.attribution]]} />
       <ReviewCard title="Ad" rows={[["Facebook Page", draft.page], ["Instagram", draft.instagram], ["素材", creativeAssets.find((item) => item.id === draft.assetId)?.file ?? "—"], ["标题", draft.title], ["网站 URL", draft.url], ["CTA", draft.cta]]} />
-      <ReviewCard title="发布前检查" rows={[["将创建对象", "4 个"], ["默认状态", "PAUSED"], ["权限是否完整", "演示权限完整"], ["阻塞错误", "无"], ["数据模式", "Demo Provider，不会写入 Meta"]]} />
+      <ReviewCard title="发布前检查" rows={[["将创建对象", "4 个"], ["默认状态", "PAUSED"], ["权限是否完整", connection.mode === "demo" ? "演示权限完整" : connection.stateLabel], ["阻塞错误", connection.canWrite ? "无" : connection.writeBlockedReason], ["数据模式", connection.mode === "demo" ? "Demo Provider，不会写入 Meta" : connection.sourceLabel]]} />
     </section>
   );
 }

@@ -1,9 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DemoMetaAdsProvider } from "@adflow/meta-client";
 import { effectiveStatusTone, rowsToCsv } from "@adflow/shared";
 
 const krAccountId = "act_23840008291";
 const usAccountId = "act_23840007712";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("DemoMetaAdsProvider", () => {
   it("filters entities by name or Meta ID", () => {
@@ -61,6 +65,27 @@ describe("DemoMetaAdsProvider", () => {
     expect(provider.listEntities("campaign", usAccountId, "US Demo Campaign")).toHaveLength(1);
     expect(provider.listEntities("campaign", krAccountId, "US Demo Campaign")).toHaveLength(0);
     expect(provider.listCreatives(usAccountId, "us_demo")).toHaveLength(1);
+  });
+
+  it("keeps simulated mutations fully local without network calls", () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(() => Promise.reject(new Error("network disabled")));
+    const provider = new DemoMetaAdsProvider();
+    const [row] = provider.listEntities("campaign", krAccountId, "Summer Glow");
+
+    provider.updateStatus("campaign", krAccountId, [row?.id ?? ""], "paused");
+    provider.updateBudget("campaign", krAccountId, [row?.id ?? ""], 123000);
+    provider.createAdBundle(krAccountId, {
+      campaignName: "Local Only Campaign",
+      objective: "Sales",
+      budget: "100000",
+      audience: "Controlled Mock Audience",
+      event: "Purchase",
+      title: "Local Only Creative",
+      assetFile: "local_only.jpg"
+    });
+    provider.enqueueSyncJob(krAccountId);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
 

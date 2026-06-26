@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { DataState } from "@adflow/shared";
 import { cn, rowsToCsv } from "@adflow/shared";
-import { demoProvider, type CampaignEntity, type EntityLevel } from "@adflow/meta-client";
+import type { CampaignEntity, EntityLevel } from "@adflow/meta-client";
 import type { ToastKind } from "@/lib/app-types";
 import { useDemoContext } from "@/lib/demo-context";
 import { useAppRuntime } from "@/lib/app-runtime";
-import { Button, ConfirmDialog, PageHeader, StateGate, StatusBadge } from "@/components/ui";
+import { Button, ConfirmDialog, DataSourceGate, LiveEmptyState, PageHeader, StateGate, StatusBadge } from "@/components/ui";
+import { writeBlockedMessage } from "@/lib/client-api-adapter";
 import { DetailDrawer } from "./DetailDrawer";
 
 type ColumnId = "budget" | "spend" | "purchases" | "cpa" | "value" | "roas" | "impressions" | "ctr" | "cpc" | "updated";
@@ -46,7 +47,7 @@ export function CampaignManager({
   const dataState = providedDataState ?? runtime.dataState;
   const showToast = providedShowToast ?? runtime.showToast;
   const router = useRouter();
-  const { account, accountLabel, queryContext, revision, touchDemoData } = useDemoContext();
+  const { api, connection, account, accountLabel, queryContext, revision, touchDemoData } = useDemoContext();
   const [level, setLevel] = useState<EntityLevel>("campaign");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "paused">("active");
@@ -102,14 +103,14 @@ export function CampaignManager({
 
   const rows = useMemo(() => {
     const minSpendValue = Number(minSpend || 0);
-    const filtered = demoProvider
+    const filtered = api
       .listEntities(level, account.id, query, queryContext)
       .filter((row) => statusFilter === "all" || row.status === statusFilter)
       .filter((row) => !minSpendValue || parseMoney(row.spend) >= minSpendValue)
       .filter((row) => !warningOnly || Boolean(row.warning));
     const sorted = [...filtered].sort((a, b) => parseMoney(a.spend) - parseMoney(b.spend));
     return sortDirection === "desc" ? sorted.reverse() : sorted;
-  }, [account.id, dataVersion, level, minSpend, query, queryContext, revision, statusFilter, sortDirection, warningOnly]);
+  }, [account.id, api, dataVersion, level, minSpend, query, queryContext, revision, statusFilter, sortDirection, warningOnly]);
 
   const pageSize = 10;
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
@@ -118,10 +119,10 @@ export function CampaignManager({
   const allPageSelected = pageRows.length > 0 && pageRows.every((row) => selectedIds.has(row.id));
   const activeFilterCount = [statusFilter !== "all", Number(minSpend || 0) > 0, warningOnly].filter(Boolean).length;
   const levelCounts = useMemo(() => ({
-    campaign: demoProvider.listEntities("campaign", account.id, "", queryContext).length,
-    adset: demoProvider.listEntities("adset", account.id, "", queryContext).length,
-    ad: demoProvider.listEntities("ad", account.id, "", queryContext).length
-  }), [account.id, dataVersion, queryContext, revision]);
+    campaign: api.listEntities("campaign", account.id, "", queryContext).length,
+    adset: api.listEntities("adset", account.id, "", queryContext).length,
+    ad: api.listEntities("ad", account.id, "", queryContext).length
+  }), [account.id, api, dataVersion, queryContext, revision]);
 
   useEffect(() => {
     if (pageIndex > totalPages) setPageIndex(totalPages);
@@ -149,8 +150,19 @@ export function CampaignManager({
     });
   };
 
+  const ensureCanWrite = () => {
+    if (connection.canWrite) return true;
+    showToast(writeBlockedMessage(connection), "warning");
+    return false;
+  };
+
   const runStatusChange = (ids: string[], status: "active" | "paused") => {
-    demoProvider.updateStatus(level, account.id, ids, status);
+    if (!ensureCanWrite()) return;
+    const updatedRows = api.updateStatus(level, account.id, ids, status);
+    if (connection.mode === "live" && updatedRows.length === 0) {
+      showToast("Live campaign write adapter is not connected.", "warning");
+      return;
+    }
     setDataVersion((version) => version + 1);
     touchDemoData();
     setSelectedIds(new Set());
@@ -159,6 +171,7 @@ export function CampaignManager({
   };
 
   const openBudgetDialog = (ids: string[]) => {
+    if (!ensureCanWrite()) return;
     const first = rows.find((row) => ids.includes(row.id));
     const current = first ? parseMoney(first.budget) || defaultBudget(account.currency) : defaultBudget(account.currency);
     setBudgetDialog({ ids, amount: String(current) });
@@ -173,7 +186,12 @@ export function CampaignManager({
       showToast("请输入有效的日预算金额", "warning");
       return;
     }
-    demoProvider.updateBudget(level, account.id, budgetDialog.ids, Math.round(amount));
+    if (!ensureCanWrite()) return;
+    const updatedRows = api.updateBudget(level, account.id, budgetDialog.ids, Math.round(amount));
+    if (connection.mode === "live" && updatedRows.length === 0) {
+      showToast("Live campaign write adapter is not connected.", "warning");
+      return;
+    }
     setDataVersion((version) => version + 1);
     touchDemoData();
     setSelectedIds(new Set());
@@ -182,7 +200,12 @@ export function CampaignManager({
   };
 
   const duplicateRows = (ids: string[]) => {
-    const copies = demoProvider.duplicateEntities(level, account.id, ids);
+    if (!ensureCanWrite()) return;
+    const copies = api.duplicateEntities(level, account.id, ids);
+    if (connection.mode === "live" && copies.length === 0) {
+      showToast("Live campaign write adapter is not connected.", "warning");
+      return;
+    }
     setDataVersion((version) => version + 1);
     touchDemoData();
     setSelectedIds(new Set(copies.map((row) => row.id)));
@@ -193,7 +216,12 @@ export function CampaignManager({
   };
 
   const markRows = (ids: string[], warning: boolean) => {
-    demoProvider.markEntities(level, account.id, ids, warning);
+    if (!ensureCanWrite()) return;
+    const updatedRows = api.markEntities(level, account.id, ids, warning);
+    if (connection.mode === "live" && updatedRows.length === 0) {
+      showToast("Live campaign write adapter is not connected.", "warning");
+      return;
+    }
     setDataVersion((version) => version + 1);
     touchDemoData();
     setBulkMoreOpen(false);
@@ -202,7 +230,12 @@ export function CampaignManager({
   };
 
   const touchRows = (ids: string[]) => {
-    demoProvider.touchEntities(level, account.id, ids);
+    if (!ensureCanWrite()) return;
+    const updatedRows = api.touchEntities(level, account.id, ids);
+    if (connection.mode === "live" && updatedRows.length === 0) {
+      showToast("Live campaign write adapter is not connected.", "warning");
+      return;
+    }
     setDataVersion((version) => version + 1);
     touchDemoData();
     setBulkMoreOpen(false);
@@ -280,14 +313,15 @@ export function CampaignManager({
   };
 
   const saveEntity = (id: string, input: { name: string; status: "active" | "paused"; budget: string }) => {
-    const updated = demoProvider.updateEntity(level, account.id, id, input);
+    if (!ensureCanWrite()) return null;
+    const updated = api.updateEntity(level, account.id, id, input);
     if (!updated) {
       showToast("未找到对象，无法保存", "danger");
       return null;
     }
     setDataVersion((version) => version + 1);
     touchDemoData();
-    const [contextRow] = demoProvider.listEntities(level, account.id, updated.name, queryContext).filter((row) => row.id === id);
+    const [contextRow] = api.listEntities(level, account.id, updated.name, queryContext).filter((row) => row.id === id);
     setDrawerEntity(contextRow ?? updated);
     showToast("设置已保存，本地 Demo 数据已更新", "success");
     return contextRow ?? updated;
@@ -295,6 +329,7 @@ export function CampaignManager({
 
   return (
     <StateGate state={dataState}>
+      <DataSourceGate connection={connection}>
       <PageHeader
         className="campaign-header"
         eyebrow={accountLabel}
@@ -302,12 +337,16 @@ export function CampaignManager({
         description="对象更新于 8 分钟前 · Insights 更新于 6 分钟前"
         actions={
           <>
-            <Button onClick={() => router.push("/campaigns/new?step=1&source=import")}>导入草稿</Button>
-            <Button variant="primary" onClick={() => router.push("/campaigns/new?step=1")}><Plus size={14} /> 新建广告</Button>
+            <Button disabled={!connection.canWrite} onClick={() => router.push("/campaigns/new?step=1&source=import")}>导入草稿</Button>
+            <Button disabled={!connection.canWrite} variant="primary" onClick={() => router.push("/campaigns/new?step=1")}><Plus size={14} /> 新建广告</Button>
           </>
         }
       />
 
+      {connection.mode === "live" && rows.length === 0 ? (
+        <LiveEmptyState title="Live campaign data is not available" detail="The Live client adapter returned no campaign rows, so Demo campaign fixtures are hidden." />
+      ) : (
+        <>
       <div className="entity-tabs" role="tablist">
         <LevelTab active={level === "campaign"} label="广告系列" count={String(levelCounts.campaign)} onClick={() => changeLevel("campaign")} />
         <LevelTab active={level === "adset"} label="广告组" count={String(levelCounts.adset)} onClick={() => changeLevel("adset")} />
@@ -382,17 +421,17 @@ export function CampaignManager({
         {selectedCount > 0 ? (
           <div className="bulk-bar visible">
             <strong>已选择 {selectedCount} 项</strong>
-            <button type="button" onClick={() => setConfirm({ type: "bulk", ids: [...selectedIds], status: "active", title: `启用 ${selectedCount} 项` })}>启用</button>
-            <button type="button" onClick={() => setConfirm({ type: "bulk", ids: [...selectedIds], status: "paused", title: `暂停 ${selectedCount} 项` })}>暂停</button>
-            <button type="button" onClick={() => openBudgetDialog([...selectedIds])}>修改预算</button>
-            <button type="button" onClick={() => duplicateRows([...selectedIds])}>复制</button>
+            <button type="button" disabled={!connection.canWrite} onClick={() => setConfirm({ type: "bulk", ids: [...selectedIds], status: "active", title: `启用 ${selectedCount} 项` })}>启用</button>
+            <button type="button" disabled={!connection.canWrite} onClick={() => setConfirm({ type: "bulk", ids: [...selectedIds], status: "paused", title: `暂停 ${selectedCount} 项` })}>暂停</button>
+            <button type="button" disabled={!connection.canWrite} onClick={() => openBudgetDialog([...selectedIds])}>修改预算</button>
+            <button type="button" disabled={!connection.canWrite} onClick={() => duplicateRows([...selectedIds])}>复制</button>
             <div className="bulk-more">
               <button type="button" onClick={() => setBulkMoreOpen((open) => !open)}>更多 <ChevronDown size={12} /></button>
               {bulkMoreOpen ? (
                 <div className="row-action-menu bulk">
-                  <button type="button" onClick={() => markRows([...selectedIds], true)}>标记待检查</button>
-                  <button type="button" onClick={() => markRows([...selectedIds], false)}>取消待检查</button>
-                  <button type="button" onClick={() => touchRows([...selectedIds])}>更新时间设为刚刚</button>
+                  <button type="button" disabled={!connection.canWrite} onClick={() => markRows([...selectedIds], true)}>标记待检查</button>
+                  <button type="button" disabled={!connection.canWrite} onClick={() => markRows([...selectedIds], false)}>取消待检查</button>
+                  <button type="button" disabled={!connection.canWrite} onClick={() => touchRows([...selectedIds])}>更新时间设为刚刚</button>
                 </div>
               ) : null}
             </div>
@@ -442,6 +481,7 @@ export function CampaignManager({
                     <button
                       className={cn("switch", row.status === "active" && "on")}
                       type="button"
+                      disabled={!connection.canWrite}
                       aria-label={`切换 ${row.name} 状态`}
                       onClick={() => setConfirm({ type: "single", ids: [row.id], status: row.status === "active" ? "paused" : "active", title: `${row.status === "active" ? "暂停" : "启用"} ${row.name}` })}
                     />
@@ -461,9 +501,9 @@ export function CampaignManager({
                       <button className="row-more" type="button" onClick={() => setRowMenuId((current) => current === row.id ? null : row.id)}>⋯</button>
                       {rowMenuId === row.id ? (
                         <div className="row-action-menu">
-                          <button type="button" onClick={() => openBudgetDialog([row.id])}>修改预算</button>
-                          <button type="button" onClick={() => duplicateRows([row.id])}>复制</button>
-                          <button type="button" onClick={() => markRows([row.id], !row.warning)}>{row.warning ? "取消待检查" : "标记待检查"}</button>
+                          <button type="button" disabled={!connection.canWrite} onClick={() => openBudgetDialog([row.id])}>修改预算</button>
+                          <button type="button" disabled={!connection.canWrite} onClick={() => duplicateRows([row.id])}>复制</button>
+                          <button type="button" disabled={!connection.canWrite} onClick={() => markRows([row.id], !row.warning)}>{row.warning ? "取消待检查" : "标记待检查"}</button>
                         </div>
                       ) : null}
                     </div>
@@ -485,7 +525,7 @@ export function CampaignManager({
         </div>
       </section>
 
-      <DetailDrawer entity={drawerEntity} level={level} currency={account.currency} readOnly={dataState === "permission-denied" || dataState === "connection-expired"} onClose={() => setDrawerEntity(null)} onSave={saveEntity} onToast={(message) => showToast(message, "info")} />
+      <DetailDrawer entity={drawerEntity} level={level} currency={account.currency} sourceLabel={connection.sourceLabel} readOnly={!connection.canWrite || dataState === "permission-denied" || dataState === "connection-expired"} onClose={() => setDrawerEntity(null)} onSave={saveEntity} onToast={(message) => showToast(message, "info")} />
       <BudgetDialog
         open={Boolean(budgetDialog)}
         amount={budgetDialog?.amount ?? ""}
@@ -503,6 +543,9 @@ export function CampaignManager({
         onClose={() => setConfirm(null)}
         onConfirm={() => confirm ? runStatusChange(confirm.ids, confirm.status) : undefined}
       />
+        </>
+      )}
+      </DataSourceGate>
     </StateGate>
   );
 }

@@ -4,11 +4,11 @@ import { RefreshCcw } from "lucide-react";
 import { useState } from "react";
 import type { DataState } from "@adflow/shared";
 import { cn } from "@adflow/shared";
-import { demoProvider, type SyncJob } from "@adflow/meta-client";
+import type { SyncJob } from "@adflow/meta-client";
 import type { ToastKind } from "@/lib/app-types";
 import { useDemoContext } from "@/lib/demo-context";
 import { useAppRuntime } from "@/lib/app-runtime";
-import { Button, PageHeader, StateGate, StatusDot } from "@/components/ui";
+import { Button, DataSourceGate, LiveEmptyState, PageHeader, StateGate, StatusDot } from "@/components/ui";
 
 const tabs = ["同步任务", "API 错误", "数据新鲜度", "审计日志"] as const;
 
@@ -22,12 +22,12 @@ export function SyncCenterPage({
   const runtime = useAppRuntime();
   const dataState = providedDataState ?? runtime.dataState;
   const showToast = providedShowToast ?? runtime.showToast;
-  const { account, accountLabel, dateLabel, touchDemoData } = useDemoContext();
+  const { api, connection, account, accountLabel, dateLabel, touchDemoData } = useDemoContext();
   const [tab, setTab] = useState<(typeof tabs)[number]>("同步任务");
   const [version, setVersion] = useState(0);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [checkedAt, setCheckedAt] = useState("刚刚");
-  const jobs = demoProvider.listSyncJobs(account.id);
+  const jobs = api.listSyncJobs(account.id);
   const errorJobs = jobs.filter((job) => Boolean(job.error));
   const visibleJobs = tab === "API 错误" ? errorJobs : jobs;
   const selectedJob = jobs.find((job) => job.id === selectedJobId) ?? null;
@@ -41,10 +41,18 @@ export function SyncCenterPage({
   void version;
 
   const enqueueSync = () => {
-    const job = demoProvider.enqueueSyncJob(account.id);
+    if (!connection.canRead) {
+      showToast(connection.stateDetail, "warning");
+      return;
+    }
+    const job = api.enqueueSyncJob(account.id);
     setTab("同步任务");
     setSelectedJobId(job.id);
     setVersion((current) => current + 1);
+    if (connection.mode === "live") {
+      showToast("Live sync adapter skeleton is selected; no Demo sync data was loaded.", "warning");
+      return;
+    }
     showToast("已新增立即同步任务，进度将在列表中更新", "success");
     [
       { delay: 500, progress: "34%", elapsed: "3s" },
@@ -52,7 +60,7 @@ export function SyncCenterPage({
       { delay: 1800, progress: "100%", elapsed: "14s", status: "success" as const }
     ].forEach((step) => {
       window.setTimeout(() => {
-        demoProvider.updateSyncJob(account.id, job.id, step);
+        api.updateSyncJob(account.id, job.id, step);
         if ("status" in step && step.status === "success") touchDemoData();
         setVersion((current) => current + 1);
       }, step.delay);
@@ -62,11 +70,12 @@ export function SyncCenterPage({
   const checkConnection = () => {
     const checked = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
     setCheckedAt(checked);
-    showToast("连接检查已完成：Demo Provider 正常", "success");
+    showToast(connection.mode === "demo" ? "连接检查已完成：Demo Provider 正常" : connection.stateDetail, connection.canRead ? "success" : "warning");
   };
 
   return (
     <StateGate state={dataState}>
+      <DataSourceGate connection={connection}>
       <PageHeader
         eyebrow="系统状态"
         title="同步与错误"
@@ -74,11 +83,15 @@ export function SyncCenterPage({
         actions={
           <>
             <Button onClick={checkConnection}>重新检查连接</Button>
-            <Button variant="primary" onClick={enqueueSync}><RefreshCcw size={14} /> 立即同步</Button>
+            <Button disabled={!connection.canRead} variant="primary" onClick={enqueueSync}><RefreshCcw size={14} /> 立即同步</Button>
           </>
         }
       />
 
+      {connection.mode === "live" && jobs.length === 0 ? (
+        <LiveEmptyState title="Live sync data is not available" detail="The Live client adapter returned no sync jobs, so Demo sync fixtures are hidden." />
+      ) : (
+        <>
       <div className="entity-tabs">
         {tabs.map((item) => (
           <button key={item} className={cn("entity-tab", tab === item && "active")} type="button" onClick={() => setTab(item)}>
@@ -99,6 +112,9 @@ export function SyncCenterPage({
         {tab === "审计日志" ? <AuditPanel /> : null}
         {detailJob?.error ? <ErrorDetail job={detailJob} onFocus={() => { setTab("API 错误"); setSelectedJobId(detailJob.id); }} /> : null}
       </section>
+        </>
+      )}
+      </DataSourceGate>
     </StateGate>
   );
 }

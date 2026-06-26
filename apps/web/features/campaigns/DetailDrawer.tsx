@@ -12,6 +12,7 @@ export function DetailDrawer({
   entity,
   level,
   currency,
+  sourceLabel,
   readOnly,
   onClose,
   onSave,
@@ -20,6 +21,7 @@ export function DetailDrawer({
   entity: CampaignEntity | null;
   level: EntityLevel;
   currency: Currency;
+  sourceLabel: string;
   readOnly: boolean;
   onClose: () => void;
   onSave: (id: string, input: { name: string; status: "active" | "paused"; budget: string }) => CampaignEntity | null;
@@ -101,7 +103,7 @@ export function DetailDrawer({
             </div>
             <div className="drawer-content">
               {tab === "概览" ? <OverviewTab entity={entity} /> : null}
-              {tab === "设置" ? <SettingsTab entity={entity} currency={currency} editMode={editMode} form={editForm} setForm={setEditForm} onSave={saveEdit} onCancel={cancelEdit} /> : null}
+              {tab === "设置" ? <SettingsTab entity={entity} currency={currency} sourceLabel={sourceLabel} editMode={editMode} form={editForm} setForm={setEditForm} onSave={saveEdit} onCancel={cancelEdit} /> : null}
               {tab === "趋势" ? <TrendTab /> : null}
               {tab === "活动" ? <ActivityTab /> : null}
             </div>
@@ -167,6 +169,7 @@ function OverviewTab({ entity }: { entity: CampaignEntity }) {
 function SettingsTab({
   entity,
   currency,
+  sourceLabel,
   editMode,
   form,
   setForm,
@@ -175,6 +178,7 @@ function SettingsTab({
 }: {
   entity: CampaignEntity;
   currency: Currency;
+  sourceLabel: string;
   editMode: boolean;
   form: { name: string; status: "active" | "paused"; budget: string };
   setForm: (form: { name: string; status: "active" | "paused"; budget: string }) => void;
@@ -197,7 +201,7 @@ function SettingsTab({
       <div className="setting-row"><span>当前状态</span><strong>{entity.status === "active" ? "ACTIVE" : "PAUSED"}</strong></div>
       <div className="setting-row"><span>预算</span><strong>{entity.budget}</strong></div>
       <div className="setting-row"><span>默认创建状态</span><strong>PAUSED</strong></div>
-      <div className="setting-row"><span>数据来源</span><strong>Demo Provider</strong></div>
+      <div className="setting-row"><span>数据来源</span><strong>{sourceLabel}</strong></div>
     </section>
   );
 }

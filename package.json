@@ -4,6 +4,10 @@
   "packageManager": "pnpm@11.9.0",
   "scripts": {
     "dev": "pnpm --filter @adflow/web dev",
+    "worker:dev": "pnpm --filter @adflow/worker dev",
+    "worker:build": "pnpm --filter @adflow/worker build",
+    "worker:start": "pnpm --filter @adflow/worker start",
+    "worker:health": "pnpm --filter @adflow/worker health",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
     "test": "turbo test",

@@ -4,9 +4,9 @@ import { ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { DataState } from "@adflow/shared";
-import { demoProvider, type CampaignEntity } from "@adflow/meta-client";
+import type { CampaignEntity } from "@adflow/meta-client";
 import type { ToastKind } from "@/lib/app-types";
-import { Button, HealthPanel, KpiCard, PageHeader, StateGate, StatusDot, TrendChart } from "@/components/ui";
+import { Button, DataSourceGate, HealthPanel, KpiCard, LiveEmptyState, PageHeader, StateGate, StatusDot, TrendChart } from "@/components/ui";
 import { useDemoContext } from "@/lib/demo-context";
 import { useAppRuntime } from "@/lib/app-runtime";
 
@@ -21,9 +21,9 @@ export function OverviewPage({
   const dataState = providedDataState ?? runtime.dataState;
   const showToast = providedShowToast ?? runtime.showToast;
   const router = useRouter();
-  const { account, accountLabel, dateLabel, dateRange, compareRange, queryContext, revision } = useDemoContext();
-  const kpis = demoProvider.getKpis(queryContext);
-  const topRows = demoProvider.listEntities("campaign", account.id, "", queryContext).slice(0, 5);
+  const { api, connection, account, accountLabel, dateLabel, dateRange, compareRange, queryContext, revision } = useDemoContext();
+  const kpis = api.getKpis(queryContext);
+  const topRows = api.listEntities("campaign", account.id, "", queryContext).slice(0, 5);
   const trend = buildOverviewTrend(account.currency, dateRange, compareRange);
   const health = buildHealthData(account.name, account.currency, topRows);
   const referenceContext = account.id === "act_23840008291" && dateRange === "近 7 天" && compareRange === "上一周期";
@@ -39,6 +39,7 @@ export function OverviewPage({
 
   return (
     <StateGate state={dataState}>
+      <DataSourceGate connection={connection}>
       <PageHeader
         eyebrow={accountLabel}
         title="广告总览"
@@ -46,11 +47,15 @@ export function OverviewPage({
         actions={
           <>
             <Button onClick={saveSnapshot}>保存快照</Button>
-            <Button variant="primary" onClick={() => router.push("/campaigns/new?step=1")}>+ 新建广告</Button>
+            <Button disabled={!connection.canWrite} variant="primary" onClick={() => router.push("/campaigns/new?step=1")}>+ 新建广告</Button>
           </>
         }
       />
 
+      {connection.mode === "live" && kpis.length === 0 && topRows.length === 0 ? (
+        <LiveEmptyState title="Live overview data is not available" detail="The Live client adapter returned no KPI or campaign rows, so Demo overview fixtures are hidden." />
+      ) : (
+        <>
       <div className="metric-grid">
         {kpis.map((metric) => <KpiCard key={metric.label} metric={metric} />)}
       </div>
@@ -113,6 +118,9 @@ export function OverviewPage({
           ))}
         </article>
       </div>
+        </>
+      )}
+      </DataSourceGate>
     </StateGate>
   );
 }

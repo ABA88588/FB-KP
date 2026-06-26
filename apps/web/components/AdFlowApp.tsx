@@ -27,6 +27,7 @@ const validStates: DataState[] = [
 export function AdFlowApp({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const page = pageFromPath(pathname);
+  const standalone = isStandalonePath(pathname);
   const [toast, setToast] = useState<{ text: string; kind: "info" | "success" | "warning" | "danger" } | null>(null);
   const [dataState, setDataState] = useState<DataState>("success");
 
@@ -46,15 +47,28 @@ export function AdFlowApp({ children }: { children: ReactNode }) {
   return (
     <DemoProvider>
       <AppRuntimeProvider value={{ dataState, showToast }}>
-        <AppShell page={page} onToast={showToast}>
-          {children}
-          <div className={`toast ${toast ? "visible" : ""} ${toast?.kind ?? "info"}`} role="status">
-            {toast?.text}
-          </div>
-        </AppShell>
+        {standalone ? (
+          <>
+            {children}
+            <div className={`toast ${toast ? "visible" : ""} ${toast?.kind ?? "info"}`} role="status">
+              {toast?.text}
+            </div>
+          </>
+        ) : (
+          <AppShell page={page} onToast={showToast}>
+            {children}
+            <div className={`toast ${toast ? "visible" : ""} ${toast?.kind ?? "info"}`} role="status">
+              {toast?.text}
+            </div>
+          </AppShell>
+        )}
       </AppRuntimeProvider>
     </DemoProvider>
   );
+}
+
+function isStandalonePath(pathname: string): boolean {
+  return pathname.startsWith("/login") || pathname.startsWith("/onboarding");
 }
 
 function pageFromPath(pathname: string): PageKey {

@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowDownRight, ArrowUpRight, Check, Info, Loader2, X } 
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cn, effectiveStatusTone, type DataState } from "@adflow/shared";
 import type { KpiMetric } from "@adflow/meta-client";
+import type { ClientApiConnection, MissingMetaRequirement } from "@/lib/client-api-adapter";
 
 export function Button({
   variant = "secondary",
@@ -42,6 +43,73 @@ export function DemoModeBanner() {
       <span className="demo-badge">演示数据</span>
       当前页面使用确定性模拟数据，不会向 Meta 创建或修改任何对象。
       <a href="/settings/connections">查看连接</a>
+    </div>
+  );
+}
+
+export function DataSourceBanner({ connection }: { connection: ClientApiConnection }) {
+  if (connection.mode === "demo") return <DemoModeBanner />;
+  const tone = connection.state === "unconfigured" ? "danger" : connection.state === "live-ready" ? "success" : "warning";
+  return (
+    <div className={cn("demo-banner", "live-banner", tone)}>
+      <span className="demo-badge">{connection.stateLabel}</span>
+      {connection.stateDetail}
+      <a href="/settings/connections">查看连接</a>
+    </div>
+  );
+}
+
+export function MissingMetaList({ items }: { items: MissingMetaRequirement[] }) {
+  if (items.length === 0) return <span>No missing Meta requirements.</span>;
+  return (
+    <div className="missing-meta-list">
+      {items.map((item) => (
+        <div key={item.id}>
+          <strong>{item.label}</strong>
+          <span>{item.detail}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function ConnectionStateNotice({ connection }: { connection: ClientApiConnection }) {
+  if (connection.state === "demo" || connection.state === "live-ready") return null;
+  const tone = connection.state === "unconfigured" ? "danger" : "warning";
+  return (
+    <div className={cn("state-notice", tone)} role="status">
+      <AlertTriangle size={15} />
+      <strong>{connection.stateLabel}</strong>
+      <span>{connection.stateDetail}</span>
+    </div>
+  );
+}
+
+export function DataSourceGate({ connection, children }: { connection: ClientApiConnection; children: ReactNode }) {
+  if (connection.state === "unconfigured") {
+    return (
+      <div className="state-panel panel danger">
+        <AlertTriangle size={22} />
+        <strong>{connection.stateLabel}</strong>
+        <span>{connection.stateDetail}</span>
+        <MissingMetaList items={connection.missingItems} />
+      </div>
+    );
+  }
+  return (
+    <>
+      <ConnectionStateNotice connection={connection} />
+      {children}
+    </>
+  );
+}
+
+export function LiveEmptyState({ title = "Live data is not available", detail = "The selected Live adapter returned no rows. Demo fixtures are hidden in Live mode." }: { title?: string; detail?: string }) {
+  return (
+    <div className="state-panel panel">
+      <Info size={22} />
+      <strong>{title}</strong>
+      <span>{detail}</span>
     </div>
   );
 }

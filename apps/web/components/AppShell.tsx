@@ -4,10 +4,9 @@ import { ChevronDown, CircleHelp, FileBarChart, Grid3X3, Image, LayoutDashboard,
 import { useRouter } from "next/navigation";
 import { type ReactNode, useMemo, useState } from "react";
 import { cn } from "@adflow/shared";
-import { demoProvider } from "@adflow/meta-client";
 import type { PageKey } from "@/lib/app-types";
 import { useDemoContext } from "@/lib/demo-context";
-import { DemoModeBanner, StatusDot } from "./ui";
+import { DataSourceBanner, StatusDot } from "./ui";
 
 const navItems: Array<{ page: PageKey; label: string; href: string; icon: ReactNode; count?: string; danger?: boolean }> = [
   { page: "overview", label: "总览", href: "/overview", icon: <LayoutDashboard size={16} /> },
@@ -34,15 +33,15 @@ export function AppShell({
 }) {
   const router = useRouter();
   const activePage: PageKey = page === "campaigns-new" ? "campaigns" : page;
-  const { account, dateRange, compareRange, queryContext, revision, cycleAccount: cycleContextAccount, cycleDateRange, cycleCompareRange, touchDemoData } = useDemoContext();
+  const { api, connection, account, dateRange, compareRange, queryContext, revision, cycleAccount: cycleContextAccount, cycleDateRange, cycleCompareRange, touchDemoData } = useDemoContext();
   const [workspaceIndex, setWorkspaceIndex] = useState(0);
   const [syncLabel, setSyncLabel] = useState("数据已更新");
   const [helpOpen, setHelpOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const workspace = workspaces[workspaceIndex] ?? workspaces[0];
   const campaignCount = useMemo(
-    () => demoProvider.listEntities("campaign", account.id, "", queryContext).length,
-    [account.id, queryContext, revision]
+    () => api.listEntities("campaign", account.id, "", queryContext).length,
+    [account.id, api, queryContext, revision]
   );
 
   const cycleWorkspace = () => {
@@ -70,6 +69,10 @@ export function AppShell({
   };
 
   const refresh = () => {
+    if (!connection.canRead) {
+      onToast(connection.stateDetail, "warning");
+      return;
+    }
     setSyncLabel("正在刷新…");
     touchDemoData();
     onToast("已创建手动刷新任务，页面不会阻塞", "success");
@@ -108,9 +111,9 @@ export function AppShell({
         </nav>
         <div className="sidebar-footer">
           <div className="connection-card">
-            <div className="connection-row"><StatusDot tone="success" /><strong>演示连接正常</strong></div>
-            <div className="connection-meta">最后同步 6 分钟前</div>
-            <div className="connection-meta">不会写入 Meta</div>
+            <div className="connection-row"><StatusDot tone={connection.state === "unconfigured" ? "danger" : connection.canWrite ? "success" : "warning"} /><strong>{connection.stateLabel}</strong></div>
+            <div className="connection-meta">{connection.sourceLabel}</div>
+            <div className="connection-meta">{connection.canWrite ? "写操作可用" : "写操作禁用"}</div>
           </div>
           <div className="unofficial">独立产品 · 非 Meta 官方工具</div>
         </div>
@@ -139,17 +142,17 @@ export function AppShell({
             <button className="icon-control" type="button" aria-label="帮助" onClick={() => setHelpOpen((open) => !open)}>
             <CircleHelp size={16} />
             </button>
-            {helpOpen ? <div className="topbar-menu"><strong>演示模式</strong><span>所有写操作只更新本地 Demo 数据。</span><button type="button" onClick={() => router.push("/settings/connections")}>查看连接</button></div> : null}
+            {helpOpen ? <div className="topbar-menu"><strong>{connection.stateLabel}</strong><span>{connection.stateDetail}</span><button type="button" onClick={() => router.push("/settings/connections")}>查看连接</button></div> : null}
           </div>
           <div className="topbar-menu-wrap">
             <button className="user-menu" type="button" onClick={() => setUserOpen((open) => !open)}>
               <span>王</span>
               <ChevronDown size={13} />
             </button>
-            {userOpen ? <div className="topbar-menu user"><strong>王 · Operator</strong><span>Demo Provider</span><button type="button" onClick={() => router.push("/settings/members")}>成员设置</button></div> : null}
+            {userOpen ? <div className="topbar-menu user"><strong>王 · Operator</strong><span>{connection.sourceLabel}</span><button type="button" onClick={() => router.push("/settings/members")}>成员设置</button></div> : null}
           </div>
         </header>
-        <DemoModeBanner />
+        <DataSourceBanner connection={connection} />
         <main id="main-content">
           <MobileNotice />
           {children}

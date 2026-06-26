@@ -1,0 +1,155 @@
+name: ${COMPOSE_PROJECT_NAME:-fbkp}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-adflow}
+      POSTGRES_USER: ${POSTGRES_USER:-adflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - backend
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    command:
+      - sh
+      - -ec
+      - |
+        umask 077
+        cat > /tmp/redis.conf <<EOF
+        appendonly yes
+        save 60 1
+        protected-mode yes
+        requirepass $${REDIS_PASSWORD}
+        EOF
+        exec redis-server /tmp/redis.conf
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" --no-auth-warning ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - backend
+
+  web:
+    image: ${WEB_IMAGE_REPOSITORY:-fbkp-web}:${IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL is required}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is required}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?TOKEN_ENCRYPTION_KEY is required}
+      TOKEN_ENCRYPTION_KEY_BASE64: ${TOKEN_ENCRYPTION_KEY_BASE64:?TOKEN_ENCRYPTION_KEY_BASE64 is required}
+      META_APP_ID: ${META_APP_ID:-}
+      META_APP_SECRET: ${META_APP_SECRET:-}
+      META_GRAPH_API_VERSION: ${META_GRAPH_API_VERSION:-v25.0}
+      META_OAUTH_REDIRECT_URI: ${META_OAUTH_REDIRECT_URI:?META_OAUTH_REDIRECT_URI is required}
+      DEMO_MODE: ${DEMO_MODE:-false}
+      META_DEMO_MODE: ${META_DEMO_MODE:-false}
+      ENABLE_META_WRITES: ${ENABLE_META_WRITES:-false}
+      EMERGENCY_READONLY: ${EMERGENCY_READONLY:-false}
+      ALLOWED_META_AD_ACCOUNT_IDS: ${ALLOWED_META_AD_ACCOUNT_IDS:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      EXPORT_URL_TTL_SECONDS: ${EXPORT_URL_TTL_SECONDS:-3600}
+      AUDIT_RETENTION_DAYS: ${AUDIT_RETENTION_DAYS:-180}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - "3000"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >
+          node -e "fetch('http://127.0.0.1:3000/api/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    networks:
+      - proxy
+      - backend
+
+  worker:
+    image: ${WORKER_IMAGE_REPOSITORY:-fbkp-worker}:${IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?TOKEN_ENCRYPTION_KEY is required}
+      TOKEN_ENCRYPTION_KEY_BASE64: ${TOKEN_ENCRYPTION_KEY_BASE64:?TOKEN_ENCRYPTION_KEY_BASE64 is required}
+      META_APP_ID: ${META_APP_ID:-}
+      META_APP_SECRET: ${META_APP_SECRET:-}
+      META_GRAPH_API_VERSION: ${META_GRAPH_API_VERSION:-v25.0}
+      DEMO_MODE: ${DEMO_MODE:-false}
+      META_DEMO_MODE: ${META_DEMO_MODE:-false}
+      ENABLE_META_WRITES: ${ENABLE_META_WRITES:-false}
+      EMERGENCY_READONLY: ${EMERGENCY_READONLY:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      WORKER_HEALTH_HOST: 127.0.0.1
+      WORKER_HEALTH_PORT: 3011
+      WORKER_HEARTBEAT_PATH: /tmp/fbkp-worker-heartbeat.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+      - egress
+
+  reverse-proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - proxy
+
+volumes:
+  postgres-data:
+  redis-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  proxy:
+  egress:
+  backend:
+    internal: true
