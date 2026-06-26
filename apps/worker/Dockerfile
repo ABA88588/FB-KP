@@ -24,7 +24,7 @@ COPY packages/db packages/db
 COPY packages/meta-client packages/meta-client
 COPY packages/shared packages/shared
 RUN pnpm --filter @adflow/worker build
-RUN pnpm prune --prod
+RUN pnpm prune --prod --ignore-scripts
 
 FROM node:24-bookworm-slim AS runner
 WORKDIR /app
