@@ -3,7 +3,7 @@
 Date: 2026-06-26
 Branch: `codex/production-meta-ads`
 Deployment target: `http://89.208.252.84`
-Latest deployed commit: `0ddb07aa5b2a6acb404c5adf83c0c3f31e07cb45`
+Latest application image commit: `5a9658d56293963649c763588487481004849232`
 
 ## Implemented
 
@@ -15,6 +15,7 @@ Latest deployed commit: `0ddb07aa5b2a6acb404c5adf83c0c3f31e07cb45`
 - Added 3 GiB swap on the host to keep image builds stable on a 1 GiB RAM server.
 - Fixed worker production runtime packaging so external packages resolve inside the Docker image.
 - Fixed auth cookie security selection so HTTP IP validation can persist database sessions while HTTPS deployments still use Secure cookies.
+- Added a shared worker heartbeat volume so `/api/health` reads the real worker heartbeat file.
 - Verified login UI, database-backed registration, logout, login, and session persistence in a real browser.
 
 ## Tested
@@ -38,7 +39,7 @@ Server:
 - PASS: `docker compose -f docker-compose.prod.yml --env-file .env.production up -d`
 - PASS: `docker compose -f docker-compose.prod.yml --env-file .env.production run --rm migrate`
 - PASS: `curl -fsS http://127.0.0.1/api/health/live`
-- PASS: `curl -fsS http://127.0.0.1/api/health` returned HTTP 200; readiness status is `degraded` only because the web health endpoint still expects a configured worker heartbeat env value
+- PASS: `curl -fsS http://127.0.0.1/api/health` returned HTTP 200 with JSON `status: ok`
 - PASS: `curl -I http://89.208.252.84`
 - PASS: `curl -I http://89.208.252.84/login`
 - PASS: `curl -I http://89.208.252.84/overview`

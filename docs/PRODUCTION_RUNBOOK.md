@@ -37,7 +37,7 @@ curl -fsS http://127.0.0.1/api/health || true
 bash deploy/healthcheck.sh
 ```
 
-`/api/health` may report overall `degraded` while still returning HTTP 200 if the optional web-side worker heartbeat env is not configured. Container health for the worker is checked by Docker and `deploy/healthcheck.sh`.
+`/api/health` should report JSON `status: ok` when PostgreSQL, Redis, worker heartbeat, demo/live mode, and write gates are healthy. The worker heartbeat is shared through the `worker-heartbeat` Docker volume.
 
 ## Logs
 
