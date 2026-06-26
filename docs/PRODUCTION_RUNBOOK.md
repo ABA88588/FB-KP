@@ -1,74 +1,116 @@
 # Production Runbook
 
-## Normal Deploy
+Current deployment host: `89.208.252.84`
+Current deployment URL: `http://89.208.252.84`
+Deployment directory: `/opt/adflow`
 
-1. Confirm no other deployment is running.
-2. Confirm `.env.production` exists on the server and is not committed.
-3. Run `deploy/deploy.sh`.
-4. Run `deploy/healthcheck.sh` if a second check is needed.
-5. Review service status with `docker compose --env-file .env.production -f docker-compose.prod.yml ps`.
+## Safety Rules
 
-Do not run `docker compose config` in shared logs because it expands environment values.
+- Do not commit `.env.production`.
+- Do not print secrets from `.env.production`.
+- Do not run `docker system prune -a` on the host.
+- Do not modify unrelated services on the server.
+- Do not enable real Meta writes until Meta credentials, test ad account IDs, and allowlist approval are complete.
+- Keep `COMPOSE_PARALLEL_LIMIT=1` for on-host image builds on this 1 GiB RAM server.
 
-## Routine Health Checks
+## Status
 
 ```bash
-deploy/healthcheck.sh
+cd /opt/adflow
+docker compose -f docker-compose.prod.yml --env-file .env.production ps
 ```
 
-Expected checks:
+Expected services:
 
-- all five containers are running;
-- PostgreSQL accepts `pg_isready`;
-- Redis responds to authenticated `PING`;
-- Caddy serves the configured local health URL.
+- `postgres`
+- `redis`
+- `web`
+- `worker`
+- `reverse-proxy`
+
+## Health Checks
+
+```bash
+cd /opt/adflow
+curl -fsS http://127.0.0.1/api/health/live
+curl -fsS http://127.0.0.1/api/health || true
+bash deploy/healthcheck.sh
+```
+
+`/api/health` may report overall `degraded` while still returning HTTP 200 if the optional web-side worker heartbeat env is not configured. Container health for the worker is checked by Docker and `deploy/healthcheck.sh`.
+
+## Logs
+
+```bash
+cd /opt/adflow
+docker compose -f docker-compose.prod.yml --env-file .env.production logs -f web
+docker compose -f docker-compose.prod.yml --env-file .env.production logs -f worker
+docker compose -f docker-compose.prod.yml --env-file .env.production logs -f reverse-proxy
+docker compose -f docker-compose.prod.yml --env-file .env.production logs -f postgres
+docker compose -f docker-compose.prod.yml --env-file .env.production logs -f redis
+```
+
+## Restart
+
+```bash
+cd /opt/adflow
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d web worker reverse-proxy
+```
+
+## Deploy Current Branch
+
+```bash
+cd /opt/adflow
+git fetch origin codex/production-meta-ads
+git checkout codex/production-meta-ads
+git reset --hard <approved-commit>
+COMPOSE_PARALLEL_LIMIT=1 docker compose -f docker-compose.prod.yml --env-file .env.production build
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d postgres redis
+docker compose -f docker-compose.prod.yml --env-file .env.production run --rm migrate
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d web worker reverse-proxy
+bash deploy/healthcheck.sh
+```
 
 ## Backup
 
-Run before risky deploys or maintenance:
-
 ```bash
-deploy/backup.sh
+cd /opt/adflow
+bash deploy/backup.sh
 ```
 
-Backups are written to `backups/` with mode `600`. Move long-term backups to encrypted storage outside the application host.
+Backups are written under `/opt/adflow/backups/`. Move long-term backups to encrypted external storage.
 
 ## Restore
 
-Restore replaces the PostgreSQL `public` schema. Stop and confirm user-facing maintenance before running:
+Restore is destructive and replaces the PostgreSQL `public` schema. Do not run it without explicit approval.
 
 ```bash
-CONFIRM_RESTORE=I_UNDERSTAND_THIS_REPLACES_PRODUCTION_DATA deploy/restore.sh backups/fbkp-postgres-YYYYMMDDTHHMMSSZ.sql.gz
+cd /opt/adflow
+CONFIRM_RESTORE=I_UNDERSTAND_THIS_REPLACES_PRODUCTION_DATA bash deploy/restore.sh backups/fbkp-postgres-YYYYMMDDTHHMMSSZ.sql.gz
+bash deploy/healthcheck.sh
 ```
-
-After restore, run `deploy/healthcheck.sh` and verify the app through the browser.
 
 ## Rollback
 
-Use rollback only for image/runtime regressions:
+Use rollback only for image/runtime regressions. For bad data migrations, decide between fix-forward and restore first.
 
 ```bash
-deploy/rollback.sh
+cd /opt/adflow
+bash deploy/rollback.sh
 ```
-
-For data migrations or destructive app changes, decide between fix-forward and database restore before changing containers.
-
-## Secret Handling
-
-- Never echo `.env.production`.
-- Never paste real `DATABASE_URL`, `REDIS_URL`, `AUTH_SECRET`, `TOKEN_ENCRYPTION_KEY`, `TOKEN_ENCRYPTION_KEY_BASE64`, or Meta secrets into logs.
-- Prefer one deployment process at a time; scripts use `.deploy-state/deploy.lock`.
-- Keep `.env.production` mode `600`.
 
 ## Network Expectations
 
-- Only Caddy publishes host port `80`.
-- PostgreSQL and Redis have no host port mapping.
-- `backend` is an internal Docker network.
-- Worker has an egress-only network attachment for future Meta API calls without exposing ports.
+- Public port 80 is exposed by `reverse-proxy`.
+- Public ports 3000, 5432, and 6379 must remain closed.
+- PostgreSQL and Redis are only reachable inside Docker networks.
+- Worker exposes no public port.
 
-## Known Gaps Outside This Infra Scope
+## External Inputs Required
 
-- App health routes are expected at `/api/health/live` and `/api/health/ready`; the default deployment health check uses liveness.
-- Worker readiness is checked through the worker package heartbeat. Queue processor behavior is owned by the worker module.
-- HTTPS automation is not configured here because the requested Caddy scope is port `80` reverse proxy only.
+- Domain name and DNS record pointing to `89.208.252.84`.
+- Meta App ID and Secret.
+- Meta OAuth redirect URI for the final domain.
+- Test Meta ad account ID.
+- Approved `ALLOWED_META_AD_ACCOUNT_IDS`.
+- Real Meta test account acceptance before any write mode is enabled.

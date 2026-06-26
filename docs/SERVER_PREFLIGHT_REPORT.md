@@ -1,56 +1,61 @@
 # Server Preflight Report
 
-Status: template and local pre-connection output format only. No production server has been logged into in this task.
+Date: 2026-06-26
+Host: 89.208.252.84
+User used for preflight/deploy: root
+Report status: completed on the target server
 
-Network reachability from the local workstation on 2026-06-26:
+## Read-Only Preflight
 
-```text
-target                      89.208.252.84
-tcp_22                      reachable
-ssh_login                   not attempted; credentials still required
-```
-
-Run this on the target server from the repository root:
+Commands executed before making server changes:
 
 ```bash
-deploy/bootstrap-server.sh --check-only
+uname -a
+cat /etc/os-release
+whoami
+uptime
+free -h
+df -h
+ss -lntup
+docker --version || true
+docker compose version || true
+systemctl status nginx --no-pager || true
+systemctl status caddy --no-pager || true
+ufw status || true
+ls -la /opt || true
 ```
 
-Expected output format:
+## Findings
 
-```text
-PRECHECK fbkp self-hosted deployment
-timestamp_utc               2026-06-26T00:00:00Z
-project_root                /opt/fbkp/_fbkp_publish
-docker                      ok (Docker version 28.x.x, build ...)
-docker_compose              ok (v2.x.x)
-compose_file                present
-caddyfile                   present
-env_file                    present
-host_port_80                available
-secret_values               not printed
-overall                     PASS
-```
+- OS: Ubuntu 26.04 LTS.
+- User: root.
+- Disk: root filesystem had about 16 GB available on a 19 GB volume.
+- Memory: about 1 GiB RAM was available before deployment.
+- Docker: not installed during preflight.
+- Docker Compose plugin: not installed during preflight.
+- UFW: not installed.
+- Caddy: not installed as a system service.
+- Nginx: installed and serving the default Ubuntu page on port 80.
+- `/opt`: present and initially did not contain the application deployment.
+- Existing non-application service: UDP port 58798 was already in use by `hysteria`. This service is not part of AdFlow and must not be modified by deployment scripts.
 
-Failure output keeps the same shape:
+## Risk Decisions
 
-```text
-PRECHECK fbkp self-hosted deployment
-timestamp_utc               2026-06-26T00:00:00Z
-project_root                /opt/fbkp/_fbkp_publish
-docker                      missing
-docker_compose              missing
-compose_file                present
-caddyfile                   present
-env_file                    missing (copy .env.production.example)
-host_port_80                unknown
-secret_values               not printed
-overall                     FAIL
-```
+- Port 80 was occupied by the default Nginx site, not an identified production site. Nginx was stopped and disabled only after this was confirmed, so the Docker reverse proxy could bind port 80.
+- No unknown application data under `/opt` was removed.
+- No destructive Docker prune was executed.
+- A 3 GiB swap file was added at `/swapfile-adflow` after the first image build exhausted the 1 GiB RAM host. Future on-host builds should keep `COMPOSE_PARALLEL_LIMIT=1`.
 
-Notes:
+## Current Network State
 
-- The preflight check confirms local runtime prerequisites and file presence only.
-- It does not print or validate real secret values.
-- It does not open public firewall rules or mutate remote infrastructure.
-- It does not run aggressive Docker prune commands.
+- Public port 80: open and served by Docker reverse proxy.
+- Public port 3000: not exposed.
+- Public port 5432: not exposed.
+- Public port 6379: not exposed.
+- SSH port 22: open.
+
+## Secrets
+
+- SSH password was not written to this report.
+- `.env.production` values were generated on the server and were not printed.
+- No Meta token or app secret was available or configured.
