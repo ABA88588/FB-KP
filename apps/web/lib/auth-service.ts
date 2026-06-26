@@ -96,7 +96,7 @@ export async function destroySession(token: string): Promise<void> {
 export function sessionCookieOptions(expiresAt: Date) {
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldUseSecureCookies(),
     sameSite: "lax" as const,
     path: "/",
     expires: expiresAt
@@ -106,11 +106,23 @@ export function sessionCookieOptions(expiresAt: Date) {
 export function expiredSessionCookieOptions() {
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldUseSecureCookies(),
     sameSite: "lax" as const,
     path: "/",
     maxAge: 0
   };
+}
+
+function shouldUseSecureCookies(): boolean {
+  const appBaseUrl = process.env.APP_BASE_URL;
+  if (appBaseUrl) {
+    try {
+      return new URL(appBaseUrl).protocol === "https:";
+    } catch {
+      return process.env.NODE_ENV === "production";
+    }
+  }
+  return process.env.NODE_ENV === "production";
 }
 
 export function publicSessionPayload(session: CreatedSession) {

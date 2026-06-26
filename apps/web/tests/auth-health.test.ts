@@ -1,9 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { encodeBase64 } from "@adflow/shared";
 import { buildReadinessResponse, type HealthCheck } from "../app/api/health/_lib";
+import { expiredSessionCookieOptions, sessionCookieOptions } from "../lib/auth-service";
 import { AuthGuardError, requireTenantContext, type ServerAuthRepository } from "../lib/server-auth";
 
 const dummyAesKey = encodeBase64(new Uint8Array(32).fill(9));
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("server tenant auth guard", () => {
   it("builds a tenant context from a valid session and membership", async () => {
@@ -43,6 +48,24 @@ describe("server tenant auth guard", () => {
       code: "PERMISSION_DENIED",
       status: 403
     } satisfies Partial<AuthGuardError>);
+  });
+});
+
+describe("auth cookies", () => {
+  it("uses non-secure cookies for HTTP deployment URLs", () => {
+    vi.stubEnv("APP_BASE_URL", "http://89.208.252.84");
+    vi.stubEnv("NODE_ENV", "production");
+
+    expect(sessionCookieOptions(new Date("2026-06-26T00:00:00.000Z")).secure).toBe(false);
+    expect(expiredSessionCookieOptions().secure).toBe(false);
+  });
+
+  it("uses secure cookies for HTTPS deployment URLs", () => {
+    vi.stubEnv("APP_BASE_URL", "https://ads.example.com");
+    vi.stubEnv("NODE_ENV", "production");
+
+    expect(sessionCookieOptions(new Date("2026-06-26T00:00:00.000Z")).secure).toBe(true);
+    expect(expiredSessionCookieOptions().secure).toBe(true);
   });
 });
 
