@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { encodeBase64 } from "@adflow/shared";
 import { buildReadinessResponse, type HealthCheck } from "../app/api/health/_lib";
@@ -104,6 +107,48 @@ describe("health readiness", () => {
     expect(response.status).toBe("ok");
     expect(response.checks.mode.details?.mode).toBe("demo");
     expect(response.checks.worker.status).toBe("ok");
+  });
+
+  it("reads worker readiness from a heartbeat file", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "adflow-health-"));
+    const heartbeatPath = path.join(tempDir, "heartbeat.json");
+    try {
+      await writeFile(
+        heartbeatPath,
+        JSON.stringify({
+          appName: "@adflow/worker",
+          status: "ready",
+          updatedAt: "2026-06-26T00:00:20.000Z",
+          queues: [{ name: "meta-sync" }]
+        }),
+        "utf8"
+      );
+
+      const response = await buildReadinessResponse({
+        env: {
+          DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/adflow",
+          REDIS_URL: "redis://127.0.0.1:6379",
+          AUTH_SECRET: "test_auth_secret_with_32_chars_min",
+          TOKEN_ENCRYPTION_KEY_BASE64: dummyAesKey,
+          META_DEMO_MODE: "true",
+          WORKER_HEARTBEAT_PATH: heartbeatPath
+        },
+        now: new Date("2026-06-26T00:00:30.000Z"),
+        probes: {
+          db: () => Promise.resolve(okCheck("db")),
+          redis: () => Promise.resolve(okCheck("redis"))
+        }
+      });
+
+      expect(response.status).toBe("ok");
+      expect(response.checks.worker).toMatchObject({
+        status: "ok",
+        message: "Worker heartbeat file is fresh"
+      });
+      expect(response.checks.worker.details?.queueCount).toBe(1);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
   });
 });
 

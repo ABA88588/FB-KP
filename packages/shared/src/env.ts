@@ -67,7 +67,8 @@ export const serverEnvSchema = z.object({
   DEMO_MODE: booleanEnv(true),
   META_DEMO_MODE: booleanEnv(true).optional(),
   ALLOWED_META_AD_ACCOUNT_IDS: optionalCsv,
-  WORKER_HEARTBEAT_ISO: optionalIsoDate
+  WORKER_HEARTBEAT_ISO: optionalIsoDate,
+  WORKER_HEARTBEAT_PATH: stringEnv
 });
 
 export const requiredServerEnvSchema = serverEnvSchema.superRefine((env, context) => {
@@ -131,7 +132,7 @@ export function envReadiness(env: Partial<ServerEnv>): EnvReadiness {
     authConfigured: Boolean(env.AUTH_SECRET),
     metaConfigured: Boolean(env.META_APP_ID && env.META_APP_SECRET && env.META_OAUTH_REDIRECT_URI),
     tokenEncryptionConfigured: Boolean(env.TOKEN_ENCRYPTION_KEY_BASE64 ?? env.TOKEN_ENCRYPTION_KEY),
-    workerConfigured: Boolean(env.WORKER_HEARTBEAT_ISO),
+    workerConfigured: Boolean(env.WORKER_HEARTBEAT_ISO || env.WORKER_HEARTBEAT_PATH),
     demoMode: env.DEMO_MODE ?? true,
     writesEnabled: env.ENABLE_META_WRITES ?? false,
     emergencyReadonly: env.EMERGENCY_READONLY ?? false,

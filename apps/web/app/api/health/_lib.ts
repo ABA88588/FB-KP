@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { createConnection } from "node:net";
 import { createRequestId, envReadiness, normalizeServerEnvInput, safeParseServerEnv, type EnvInput, type ServerEnv } from "@adflow/shared";
 
@@ -153,29 +154,79 @@ async function probeTcpUrl(rawUrl: string, expectedService: string, defaultPort:
 }
 
 function checkWorker(env: ServerEnv, options: HealthProbeOptions): Promise<HealthCheck> {
-  if (!env.WORKER_HEARTBEAT_ISO) {
-    return Promise.resolve({ status: "unconfigured", message: "Worker heartbeat is not configured" });
+  if (env.WORKER_HEARTBEAT_ISO) {
+    return Promise.resolve(checkWorkerHeartbeatTime(env.WORKER_HEARTBEAT_ISO, options, "env"));
   }
 
-  const heartbeatAt = new Date(env.WORKER_HEARTBEAT_ISO);
+  if (env.WORKER_HEARTBEAT_PATH) {
+    return checkWorkerHeartbeatFile(env.WORKER_HEARTBEAT_PATH, options);
+  }
+
+  return Promise.resolve({ status: "unconfigured", message: "Worker heartbeat is not configured" });
+}
+
+async function checkWorkerHeartbeatFile(heartbeatPath: string, options: HealthProbeOptions): Promise<HealthCheck> {
+  try {
+    const raw = await readFile(heartbeatPath, "utf8");
+    const heartbeat = JSON.parse(raw) as { updatedAt?: unknown; status?: unknown; queues?: unknown };
+    if (typeof heartbeat.updatedAt !== "string") {
+      return { status: "degraded", message: "Worker heartbeat file does not include updatedAt", details: { heartbeatPath } };
+    }
+
+    const check = checkWorkerHeartbeatTime(heartbeat.updatedAt, options, "file");
+    if (check.status !== "ok") return { ...check, details: { ...check.details, heartbeatPath } };
+
+    if (heartbeat.status !== "ready") {
+      return {
+        status: "degraded",
+        message: "Worker heartbeat is fresh but worker is not ready",
+        details: {
+          ...check.details,
+          heartbeatPath,
+          workerStatus: typeof heartbeat.status === "string" ? heartbeat.status : "unknown"
+        }
+      };
+    }
+
+    return {
+      ...check,
+      message: "Worker heartbeat file is fresh",
+      details: {
+        ...check.details,
+        heartbeatPath,
+        workerStatus: heartbeat.status,
+        queueCount: Array.isArray(heartbeat.queues) ? heartbeat.queues.length : 0
+      }
+    };
+  } catch {
+    return { status: "unavailable", message: "Worker heartbeat file is not readable", details: { heartbeatPath } };
+  }
+}
+
+function checkWorkerHeartbeatTime(heartbeatIso: string, options: HealthProbeOptions, source: "env" | "file"): HealthCheck {
+  if (!heartbeatIso) {
+    return { status: "unconfigured", message: "Worker heartbeat is not configured" };
+  }
+
+  const heartbeatAt = new Date(heartbeatIso);
   if (Number.isNaN(heartbeatAt.getTime())) {
-    return Promise.resolve({ status: "degraded", message: "Worker heartbeat is invalid" });
+    return { status: "degraded", message: "Worker heartbeat is invalid" };
   }
 
   const ageSeconds = Math.floor((options.now.getTime() - heartbeatAt.getTime()) / 1000);
   if (ageSeconds > 120) {
-    return Promise.resolve({
+    return {
       status: "unavailable",
       message: "Worker heartbeat is stale",
-      details: { ageSeconds }
-    });
+      details: { ageSeconds, source }
+    };
   }
 
-  return Promise.resolve({
+  return {
     status: "ok",
     message: "Worker heartbeat is fresh",
-    details: { ageSeconds }
-  });
+    details: { ageSeconds, source }
+  };
 }
 
 function buildEnvCheck(envResult: ReturnType<typeof safeParseServerEnv>, readiness: ReturnType<typeof envReadiness>, env: ServerEnv): HealthCheck {
@@ -278,7 +329,8 @@ function coerceServerEnv(input: EnvInput): ServerEnv {
     DEMO_MODE: coerceBoolean(normalized.DEMO_MODE, true),
     META_DEMO_MODE: coerceBoolean(normalized.META_DEMO_MODE, true),
     ALLOWED_META_AD_ACCOUNT_IDS: splitCsv(coerceString(normalized.ALLOWED_META_AD_ACCOUNT_IDS)),
-    WORKER_HEARTBEAT_ISO: coerceString(normalized.WORKER_HEARTBEAT_ISO) ?? ""
+    WORKER_HEARTBEAT_ISO: coerceString(normalized.WORKER_HEARTBEAT_ISO) ?? "",
+    WORKER_HEARTBEAT_PATH: coerceString(normalized.WORKER_HEARTBEAT_PATH) ?? ""
   };
 }
 

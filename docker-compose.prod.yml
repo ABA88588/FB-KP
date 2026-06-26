@@ -97,6 +97,7 @@ services:
       EMERGENCY_READONLY: ${EMERGENCY_READONLY:-false}
       ALLOWED_META_AD_ACCOUNT_IDS: ${ALLOWED_META_AD_ACCOUNT_IDS:-}
       EXPORT_STORAGE_DIR: /var/lib/adflow/exports
+      WORKER_HEARTBEAT_PATH: /var/lib/adflow/worker/heartbeat.json
       LOG_LEVEL: ${LOG_LEVEL:-info}
       EXPORT_URL_TTL_SECONDS: ${EXPORT_URL_TTL_SECONDS:-3600}
       AUDIT_RETENTION_DAYS: ${AUDIT_RETENTION_DAYS:-180}
@@ -121,6 +122,8 @@ services:
     networks:
       - proxy
       - backend
+    volumes:
+      - worker-heartbeat:/var/lib/adflow/worker:ro
 
   worker:
     image: ${WORKER_IMAGE_REPOSITORY:-fbkp-worker}:${IMAGE_TAG:-local}
@@ -146,7 +149,7 @@ services:
       EXPORT_STORAGE_DIR: /var/lib/adflow/exports
       WORKER_HEALTH_HOST: 127.0.0.1
       WORKER_HEALTH_PORT: 3011
-      WORKER_HEARTBEAT_PATH: /tmp/fbkp-worker-heartbeat.json
+      WORKER_HEARTBEAT_PATH: /var/lib/adflow/worker/heartbeat.json
     depends_on:
       postgres:
         condition: service_healthy
@@ -157,6 +160,7 @@ services:
       - egress
     volumes:
       - export-data:/var/lib/adflow/exports
+      - worker-heartbeat:/var/lib/adflow/worker
 
   reverse-proxy:
     image: caddy:2-alpine
@@ -179,6 +183,7 @@ volumes:
   caddy-data:
   caddy-config:
   export-data:
+  worker-heartbeat:
 
 networks:
   proxy:

@@ -69,7 +69,9 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --system --gid 1001 nextjs \
-  && useradd --system --uid 1001 --gid nextjs --home-dir /app nextjs
+  && useradd --system --uid 1001 --gid nextjs --home-dir /app nextjs \
+  && mkdir -p /var/lib/adflow/worker \
+  && chmod 1777 /var/lib/adflow/worker
 
 COPY --from=builder --chown=nextjs:nextjs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nextjs /app/apps/web/.next/static ./apps/web/.next/static

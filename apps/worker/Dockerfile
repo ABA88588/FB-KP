@@ -37,7 +37,9 @@ RUN apt-get update \
 
 RUN groupadd --system --gid 1002 worker \
   && useradd --system --uid 1002 --gid worker --home-dir /app worker \
-  && chown worker:worker /app
+  && chown worker:worker /app \
+  && mkdir -p /var/lib/adflow/worker \
+  && chmod 1777 /var/lib/adflow/worker
 
 COPY --from=builder --chown=worker:worker /app/node_modules ./node_modules
 COPY --from=builder --chown=worker:worker /app/packages/db ./packages/db
