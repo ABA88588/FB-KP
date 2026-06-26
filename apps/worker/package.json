@@ -16,7 +16,7 @@
     "lint": "eslint src --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
-    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && esbuild src/index.ts src/health/read-heartbeat.ts --bundle --platform=node --format=esm --target=node24 --outdir=dist --outbase=src --sourcemap --external:bullmq --external:ioredis --external:pg --external:@prisma/*",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && esbuild src/index.ts src/health/read-heartbeat.ts --bundle --platform=node --format=esm --target=node24 --outdir=dist --outbase=src --sourcemap --external:pg --external:@prisma/*",
     "start": "node --enable-source-maps dist/index.js",
     "health": "tsx src/health/read-heartbeat.ts"
   },
