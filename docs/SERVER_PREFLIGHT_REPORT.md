@@ -1,6 +1,14 @@
 # Server Preflight Report
 
-Status: template and local pre-connection output format only. No production server has been connected in this task.
+Status: template and local pre-connection output format only. No production server has been logged into in this task.
+
+Network reachability from the local workstation on 2026-06-26:
+
+```text
+target                      89.208.252.84
+tcp_22                      reachable
+ssh_login                   not attempted; credentials still required
+```
 
 Run this on the target server from the repository root:
 
