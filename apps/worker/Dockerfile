@@ -50,7 +50,9 @@ COPY --from=builder --chown=worker:worker /app/prisma.config.ts ./prisma.config.
 RUN set -eux; \
   mkdir -p node_modules/@prisma; \
   ln -s ../.pnpm/@prisma+adapter-pg@7.8.0/node_modules/@prisma/adapter-pg node_modules/@prisma/adapter-pg; \
-  ln -s ../.pnpm/@prisma+client@7.8.0_*/node_modules/@prisma/client node_modules/@prisma/client; \
+  prisma_client_dir="$(find node_modules/.pnpm -maxdepth 1 -type d -name '@prisma+client@7.8.0_*' | head -n 1)"; \
+  test -n "$prisma_client_dir"; \
+  ln -s "/app/${prisma_client_dir}/node_modules/@prisma/client" node_modules/@prisma/client; \
   ln -s .pnpm/pg@8.22.0/node_modules/pg node_modules/pg
 
 USER worker
