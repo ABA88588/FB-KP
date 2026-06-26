@@ -48,12 +48,20 @@ COPY --from=builder --chown=worker:worker /app/db ./db
 COPY --from=builder --chown=worker:worker /app/prisma.config.ts ./prisma.config.ts
 
 RUN set -eux; \
-  mkdir -p node_modules/@prisma; \
-  ln -s ../.pnpm/@prisma+adapter-pg@7.8.0/node_modules/@prisma/adapter-pg node_modules/@prisma/adapter-pg; \
-  prisma_client_dir="$(find node_modules/.pnpm -maxdepth 1 -type d -name '@prisma+client@7.8.0_*' | head -n 1)"; \
-  test -n "$prisma_client_dir"; \
-  ln -s "/app/${prisma_client_dir}/node_modules/@prisma/client" node_modules/@prisma/client; \
-  ln -s .pnpm/pg@8.22.0/node_modules/pg node_modules/pg
+  link_pkg() { \
+    dest="$1"; \
+    pattern="$2"; \
+    package_path="$3"; \
+    package_dir="$(find node_modules/.pnpm -maxdepth 1 -type d -name "$pattern" | head -n 1)"; \
+    test -n "$package_dir"; \
+    mkdir -p "node_modules/$(dirname "$dest")"; \
+    ln -s "/app/${package_dir}/node_modules/${package_path}" "node_modules/${dest}"; \
+  }; \
+  link_pkg "@prisma/adapter-pg" "@prisma+adapter-pg@7.8.0" "@prisma/adapter-pg"; \
+  link_pkg "@prisma/client" "@prisma+client@7.8.0_*" "@prisma/client"; \
+  link_pkg "pg" "pg@8.22.0" "pg"; \
+  link_pkg "bullmq" "bullmq@5.79.1" "bullmq"; \
+  link_pkg "ioredis" "ioredis@5.10.1" "ioredis"
 
 USER worker
 
