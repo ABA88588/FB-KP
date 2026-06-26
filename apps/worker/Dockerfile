@@ -47,6 +47,12 @@ COPY --from=builder --chown=worker:worker /app/apps/worker/dist ./apps/worker/di
 COPY --from=builder --chown=worker:worker /app/db ./db
 COPY --from=builder --chown=worker:worker /app/prisma.config.ts ./prisma.config.ts
 
+RUN set -eux; \
+  mkdir -p node_modules/@prisma; \
+  ln -s ../.pnpm/@prisma+adapter-pg@7.8.0/node_modules/@prisma/adapter-pg node_modules/@prisma/adapter-pg; \
+  ln -s ../.pnpm/@prisma+client@7.8.0_*/node_modules/@prisma/client node_modules/@prisma/client; \
+  ln -s .pnpm/pg@8.22.0/node_modules/pg node_modules/pg
+
 USER worker
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
