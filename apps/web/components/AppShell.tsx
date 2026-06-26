@@ -79,6 +79,11 @@ export function AppShell({
     window.setTimeout(() => setSyncLabel("刚刚刷新"), 700);
   };
 
+  const logout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+  };
+
   return (
     <div className="app-shell">
       <aside className="sidebar" aria-label="主导航">
@@ -149,7 +154,7 @@ export function AppShell({
               <span>王</span>
               <ChevronDown size={13} />
             </button>
-            {userOpen ? <div className="topbar-menu user"><strong>王 · Operator</strong><span>{connection.sourceLabel}</span><button type="button" onClick={() => router.push("/settings/members")}>成员设置</button></div> : null}
+            {userOpen ? <div className="topbar-menu user"><strong>王 · Operator</strong><span>{connection.sourceLabel}</span><button type="button" onClick={() => router.push("/settings/members")}>成员设置</button><button type="button" onClick={() => void logout()}>退出登录</button></div> : null}
           </div>
         </header>
         <DataSourceBanner connection={connection} />

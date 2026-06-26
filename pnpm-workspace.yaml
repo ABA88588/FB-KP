@@ -2,6 +2,10 @@ packages:
   - "apps/*"
   - "packages/*"
 allowBuilds:
+  "@prisma/engines@7.8.0": true
+  "esbuild@0.28.1": true
+  "msgpackr-extract@3.0.4": true
+  "prisma@7.8.0": true
   "sharp@0.34.5": true
 minimumReleaseAgeExclude:
   - '@turbo/darwin-64@2.10.0'

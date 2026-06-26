@@ -8,7 +8,8 @@ import {
   resolveInitialDataMode,
   type ClientApiAdapter,
   type ClientApiConnection,
-  type ClientDataMode
+  type ClientDataMode,
+  type LiveSnapshot
 } from "@/lib/client-api-adapter";
 
 export const dateRanges = ["近 7 天", "近 14 天", "近 30 天"] as const;
@@ -70,7 +71,8 @@ const DemoContext = createContext<DemoContextValue | null>(null);
 
 export function DemoProvider({ children }: { children: ReactNode }) {
   const [mode, setModeState] = useState<ClientDataMode>(resolveInitialDataMode);
-  const api = useMemo(() => getClientApiAdapter(mode), [mode]);
+  const [liveSnapshot, setLiveSnapshot] = useState<LiveSnapshot | null>(null);
+  const api = useMemo(() => getClientApiAdapter(mode, liveSnapshot), [liveSnapshot, mode]);
   const connection = useMemo(() => getClientApiConnection(mode), [mode]);
   const accounts = useMemo(() => api.listAdAccounts(), [api]);
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? fallbackAccount.id);
@@ -103,11 +105,30 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     window.localStorage.setItem(storageKey, JSON.stringify({ mode, accountId: account.id, dateRange, compareRange }));
   }, [account.id, compareRange, dateRange, loadedStorage, mode]);
 
+  useEffect(() => {
+    if (mode !== "live") return;
+    let cancelled = false;
+    fetch("/api/live/bootstrap", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { data?: LiveSnapshot } | null) => {
+        if (!cancelled && payload?.data) {
+          setLiveSnapshot(payload.data);
+          setRevision((current) => current + 1);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLiveSnapshot(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode]);
+
   const value = useMemo<DemoContextValue>(() => {
     const queryContext: DemoQueryContext = { accountId: account.id, dateRange, compareRange };
     const touchDemoData = () => setRevision((current) => current + 1);
     const setMode = (nextMode: ClientDataMode) => {
-      const nextApi = getClientApiAdapter(nextMode);
+      const nextApi = getClientApiAdapter(nextMode, nextMode === "live" ? liveSnapshot : null);
       const [nextAccount] = nextApi.listAdAccounts();
       setModeState(nextMode);
       setAccountId(nextAccount?.id ?? (nextMode === "live" ? liveFallbackAccount.id : fallbackAccount.id));
@@ -165,7 +186,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       setMode,
       touchDemoData
     };
-  }, [account, accountIndex, accounts, api, compareRange, connection, dateRange, mode, revision]);
+  }, [account, accountIndex, accounts, api, compareRange, connection, dateRange, liveSnapshot, mode, revision]);
 
   return <DemoContext.Provider value={value}>{children}</DemoContext.Provider>;
 }

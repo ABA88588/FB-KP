@@ -18,6 +18,7 @@
     "baseUrl": ".",
     "paths": {
       "@adflow/meta-client": ["packages/meta-client/src/index.ts"],
+      "@adflow/db": ["packages/db/src/index.ts"],
       "@adflow/shared": ["packages/shared/src/index.ts"]
     }
   }

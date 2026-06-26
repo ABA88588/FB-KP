@@ -35,6 +35,55 @@ export const liveCampaignSchema = z.object({
   updated_time: z.string().optional()
 }).passthrough();
 
+export const liveAdSetSchema = z.object({
+  id: z.string(),
+  campaign_id: z.string(),
+  name: z.string(),
+  configured_status: z.string().optional(),
+  effective_status: z.string().optional(),
+  daily_budget: z.string().optional(),
+  lifetime_budget: z.string().optional(),
+  optimization_goal: z.string().optional(),
+  billing_event: z.string().optional(),
+  targeting: z.unknown().optional(),
+  promoted_object: z.unknown().optional(),
+  updated_time: z.string().optional()
+}).passthrough();
+
+export const liveAdSchema = z.object({
+  id: z.string(),
+  campaign_id: z.string(),
+  adset_id: z.string(),
+  creative: z.object({ id: z.string().optional() }).passthrough().optional(),
+  name: z.string(),
+  configured_status: z.string().optional(),
+  effective_status: z.string().optional(),
+  updated_time: z.string().optional()
+}).passthrough();
+
+export const liveCreativeSchema = z.object({
+  id: z.string(),
+  name: z.string().optional(),
+  title: z.string().optional(),
+  body: z.string().optional(),
+  image_hash: z.string().optional(),
+  image_url: z.string().optional(),
+  thumbnail_url: z.string().optional(),
+  status: z.string().optional()
+}).passthrough();
+
+export const liveInsightSchema = z.record(z.string(), z.unknown());
+
+export const liveAssetSchema = z.object({
+  id: z.string(),
+  name: z.string().optional()
+}).passthrough();
+
+export const liveMeSchema = z.object({
+  id: z.string(),
+  name: z.string().optional()
+}).passthrough();
+
 export const idResponseSchema = z.object({
   id: z.string()
 }).passthrough();

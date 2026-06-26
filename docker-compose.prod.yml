@@ -47,6 +47,30 @@ services:
     networks:
       - backend
 
+  migrate:
+    image: ${WEB_IMAGE_REPOSITORY:-fbkp-web}:${IMAGE_TAG:-local}-migrate
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: deps
+    restart: "no"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is required}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?TOKEN_ENCRYPTION_KEY is required}
+      TOKEN_ENCRYPTION_KEY_BASE64: ${TOKEN_ENCRYPTION_KEY_BASE64:?TOKEN_ENCRYPTION_KEY_BASE64 is required}
+      META_OAUTH_REDIRECT_URI: ${META_OAUTH_REDIRECT_URI:?META_OAUTH_REDIRECT_URI is required}
+    command: ["pnpm", "db:migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+
   web:
     image: ${WEB_IMAGE_REPOSITORY:-fbkp-web}:${IMAGE_TAG:-local}
     build:
@@ -72,10 +96,13 @@ services:
       ENABLE_META_WRITES: ${ENABLE_META_WRITES:-false}
       EMERGENCY_READONLY: ${EMERGENCY_READONLY:-false}
       ALLOWED_META_AD_ACCOUNT_IDS: ${ALLOWED_META_AD_ACCOUNT_IDS:-}
+      EXPORT_STORAGE_DIR: /var/lib/adflow/exports
       LOG_LEVEL: ${LOG_LEVEL:-info}
       EXPORT_URL_TTL_SECONDS: ${EXPORT_URL_TTL_SECONDS:-3600}
       AUDIT_RETENTION_DAYS: ${AUDIT_RETENTION_DAYS:-180}
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -114,7 +141,9 @@ services:
       META_DEMO_MODE: ${META_DEMO_MODE:-false}
       ENABLE_META_WRITES: ${ENABLE_META_WRITES:-false}
       EMERGENCY_READONLY: ${EMERGENCY_READONLY:-false}
+      ALLOWED_META_AD_ACCOUNT_IDS: ${ALLOWED_META_AD_ACCOUNT_IDS:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      EXPORT_STORAGE_DIR: /var/lib/adflow/exports
       WORKER_HEALTH_HOST: 127.0.0.1
       WORKER_HEALTH_PORT: 3011
       WORKER_HEARTBEAT_PATH: /tmp/fbkp-worker-heartbeat.json
@@ -126,6 +155,8 @@ services:
     networks:
       - backend
       - egress
+    volumes:
+      - export-data:/var/lib/adflow/exports
 
   reverse-proxy:
     image: caddy:2-alpine
@@ -147,6 +178,7 @@ volumes:
   redis-data:
   caddy-data:
   caddy-config:
+  export-data:
 
 networks:
   proxy:

@@ -25,7 +25,7 @@ export function buildMetaOAuthUrl(env: ServerEnv, state: string): URL {
   url.searchParams.set("redirect_uri", env.META_OAUTH_REDIRECT_URI);
   url.searchParams.set("state", state);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", ["ads_read", "ads_management", "business_management"].join(","));
+  url.searchParams.set("scope", ["ads_read", "ads_management", "business_management", "pages_read_engagement", "instagram_basic"].join(","));
   return url;
 }
 

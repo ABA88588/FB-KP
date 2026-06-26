@@ -16,17 +16,21 @@
     "lint": "eslint src --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && esbuild src/index.ts src/health/read-heartbeat.ts --bundle --platform=node --format=esm --target=node24 --outdir=dist --outbase=src --sourcemap --external:bullmq --external:ioredis --external:pg --external:@prisma/*",
     "start": "node --enable-source-maps dist/index.js",
     "health": "tsx src/health/read-heartbeat.ts"
   },
   "dependencies": {
+    "@adflow/db": "workspace:*",
+    "@adflow/meta-client": "workspace:*",
+    "@adflow/shared": "workspace:*",
     "bullmq": "^5.79.1",
     "ioredis": "5.10.1",
     "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "26.0.1",
+    "esbuild": "0.28.1",
     "tsx": "4.22.4",
     "vitest": "4.1.9"
   }

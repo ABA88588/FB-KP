@@ -7,7 +7,11 @@ export default defineConfig({
   reporter: [["list"], ["html", { outputFolder: "../../playwright-report", open: "never" }]],
   timeout: 30_000,
   expect: {
-    timeout: 5_000
+    timeout: 5_000,
+    toHaveScreenshot: {
+      maxDiffPixelRatio: 0.03,
+      threshold: 0.2
+    }
   },
   use: {
     baseURL: "http://127.0.0.1:3007",

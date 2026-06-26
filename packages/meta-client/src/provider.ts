@@ -59,6 +59,59 @@ export type LiveCampaign = {
   updatedTime?: string;
 };
 
+export type LiveAdSet = {
+  metaId: string;
+  campaignMetaId: string;
+  name: string;
+  configuredStatus: string;
+  effectiveStatus: string;
+  dailyBudgetMinor?: string;
+  lifetimeBudgetMinor?: string;
+  optimizationGoal?: string;
+  billingEvent?: string;
+  targetingJson?: unknown;
+  promotedObjectJson?: unknown;
+  updatedTime?: string;
+};
+
+export type LiveAd = {
+  metaId: string;
+  campaignMetaId: string;
+  adSetMetaId: string;
+  creativeMetaId?: string;
+  name: string;
+  configuredStatus: string;
+  effectiveStatus: string;
+  updatedTime?: string;
+};
+
+export type LiveCreative = {
+  metaId: string;
+  name?: string;
+  title?: string;
+  body?: string;
+  imageHash?: string;
+  imageUrl?: string;
+  thumbnailUrl?: string;
+  status?: string;
+  raw: unknown;
+};
+
+export type LiveInsight = Record<string, unknown> & {
+  date_start?: string;
+  date_stop?: string;
+  spend?: string;
+  impressions?: string;
+  clicks?: string;
+  reach?: string;
+};
+
+export type LiveAsset = {
+  metaId: string;
+  name?: string;
+  raw: unknown;
+};
+
 export type MetaCreateCampaignInput = {
   adAccountMetaId: string;
   name: string;
@@ -107,6 +160,23 @@ export type MetaMutationResult = {
   status: typeof DEFAULT_META_MUTATION_STATUS | "UPDATED";
 };
 
+export type MetaUpdateObjectInput = {
+  objectMetaId: string;
+  objectType: "campaign" | "adset" | "ad";
+  name?: string;
+  status?: "ACTIVE" | "PAUSED";
+  dailyBudgetMinor?: number;
+  operationId: string;
+  guard: WriteGateResult;
+};
+
+export type MetaDuplicateObjectInput = {
+  objectMetaId: string;
+  objectType: "campaign" | "adset" | "ad";
+  operationId: string;
+  guard: WriteGateResult;
+};
+
 export type MetaMutationGuardInput = {
   adAccountMetaId: string;
   enableMetaWrites?: boolean;
@@ -137,10 +207,21 @@ export function evaluateMetaMutationGuard(input: MetaMutationGuardInput, operati
 
 export interface LiveMetaAdsProviderContract extends MetaAdsProvider {
   readonly mode: "live";
+  getMe(request: LiveMetaRequest): Promise<{ id: string; name?: string }>;
   listAdAccounts(request: LiveMetaRequest): Promise<LiveAdAccount[]>;
   listCampaigns(request: LiveMetaRequest, adAccountMetaId: string): Promise<LiveCampaign[]>;
+  listAdSets(request: LiveMetaRequest, adAccountMetaId: string): Promise<LiveAdSet[]>;
+  listAds(request: LiveMetaRequest, adAccountMetaId: string): Promise<LiveAd[]>;
+  listCreatives(request: LiveMetaRequest, adAccountMetaId: string): Promise<LiveCreative[]>;
+  listInsights(request: LiveMetaRequest, adAccountMetaId: string, params: { level: "account" | "campaign" | "adset" | "ad"; since: string; until: string; breakdowns?: readonly string[]; attributionWindows?: readonly string[] }): Promise<LiveInsight[]>;
+  listPages(request: LiveMetaRequest): Promise<LiveAsset[]>;
+  listInstagramAccounts(request: LiveMetaRequest, businessMetaId: string): Promise<LiveAsset[]>;
+  listPixels(request: LiveMetaRequest, adAccountMetaId: string): Promise<LiveAsset[]>;
+  listCustomAudiences(request: LiveMetaRequest, adAccountMetaId: string): Promise<LiveAsset[]>;
   createCampaign(request: LiveMetaRequest, input: MetaCreateCampaignInput): Promise<MetaMutationResult>;
   createAdSet(request: LiveMetaRequest, input: MetaCreateAdSetInput): Promise<MetaMutationResult>;
   createAdCreative(request: LiveMetaRequest, input: MetaCreateAdCreativeInput): Promise<MetaMutationResult>;
   createAd(request: LiveMetaRequest, input: MetaCreateAdInput): Promise<MetaMutationResult>;
+  updateObject(request: LiveMetaRequest, input: MetaUpdateObjectInput): Promise<MetaMutationResult>;
+  duplicateObject(request: LiveMetaRequest, input: MetaDuplicateObjectInput): Promise<MetaMutationResult>;
 }

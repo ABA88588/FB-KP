@@ -42,3 +42,4 @@ Thumbs.db
 
 # Prisma generated local artifacts
 packages/db/generated/
+packages/db/src/generated/

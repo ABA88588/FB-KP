@@ -5,9 +5,11 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json prisma.config.ts ./
+COPY db db
 COPY apps/web/package.json apps/web/package.json
 COPY apps/worker/package.json apps/worker/package.json
+COPY packages/db/package.json packages/db/package.json
 COPY packages/meta-client/package.json packages/meta-client/package.json
 COPY packages/shared/package.json packages/shared/package.json
 RUN pnpm install --frozen-lockfile
@@ -15,6 +17,7 @@ RUN pnpm install --frozen-lockfile
 FROM deps AS builder
 WORKDIR /app
 COPY apps/web apps/web
+COPY packages/db packages/db
 COPY packages/meta-client packages/meta-client
 COPY packages/shared packages/shared
 
@@ -63,6 +66,8 @@ RUN groupadd --system --gid 1001 nextjs \
 COPY --from=builder --chown=nextjs:nextjs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nextjs /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=builder --chown=nextjs:nextjs /app/apps/web/public ./apps/web/public
+COPY --from=builder --chown=nextjs:nextjs /app/db ./db
+COPY --from=builder --chown=nextjs:nextjs /app/prisma.config.ts ./prisma.config.ts
 
 USER nextjs
 EXPOSE 3000

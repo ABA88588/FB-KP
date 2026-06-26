@@ -76,7 +76,7 @@ describe("LiveMetaAdsProvider", () => {
       disabled: true,
       status: "unconfigured",
       reason: "MISSING_CREDENTIALS",
-      missing: ["META_APP_ID", "META_APP_SECRET", "META_ACCESS_TOKEN"]
+      missing: ["META_APP_ID", "META_APP_SECRET"]
     });
     await expect(provider.listAdAccounts({})).rejects.toBeInstanceOf(MetaProviderConfigurationError);
     expect(fetchImpl).not.toHaveBeenCalled();

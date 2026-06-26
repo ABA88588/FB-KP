@@ -5,6 +5,7 @@ import {
   type Permission,
   type TenantContext
 } from "@adflow/shared";
+import { prisma } from "@adflow/db";
 
 export const sessionCookieName = "adflow.session";
 
@@ -104,6 +105,39 @@ export function assertSameTenant(context: TenantContext, resourceOrganizationId:
     throw new AuthGuardError("PERMISSION_DENIED", "Resource does not belong to this organization", 403);
   }
 }
+
+export const databaseAuthRepository: ServerAuthRepository = {
+  async getSessionByToken(token) {
+    const session = await prisma.session.findUnique({
+      where: { token },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true
+          }
+        }
+      }
+    });
+    return session;
+  },
+  async getMembership(input) {
+    return prisma.membership.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId: input.organizationId,
+          userId: input.userId
+        }
+      },
+      select: {
+        organizationId: true,
+        userId: true,
+        role: true
+      }
+    });
+  }
+};
 
 function assertSessionActive(session: AuthSession, now: Date): void {
   if (!session.expiresAt) return;

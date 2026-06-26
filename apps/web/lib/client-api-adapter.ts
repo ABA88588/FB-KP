@@ -62,15 +62,17 @@ export type ClientApiAdapter = {
   updateSyncJob: (accountId: string, id: string, patch: Partial<Pick<SyncJob, "status" | "progress" | "elapsed">>) => SyncJob[];
 };
 
+export type LiveSnapshot = {
+  accounts: AdAccount[];
+  entities: CampaignEntity[];
+  creatives: CreativeAsset[];
+  reportRows: ReportRow[];
+  syncJobs: SyncJob[];
+};
+
 const clientEnv = {
   dataMode: process.env.NEXT_PUBLIC_ADFLOW_DATA_MODE,
   metaConfigured: process.env.NEXT_PUBLIC_META_CONFIGURED,
-  metaAppId: process.env.NEXT_PUBLIC_META_APP_ID,
-  metaBusinessId: process.env.NEXT_PUBLIC_META_BUSINESS_ID,
-  metaAdAccountId: process.env.NEXT_PUBLIC_META_AD_ACCOUNT_ID,
-  metaAdAccountName: process.env.NEXT_PUBLIC_META_AD_ACCOUNT_NAME,
-  metaCurrency: process.env.NEXT_PUBLIC_META_CURRENCY,
-  metaTimezone: process.env.NEXT_PUBLIC_META_TIMEZONE,
   metaReadonly: process.env.NEXT_PUBLIC_META_READONLY,
   metaWritesEnabled: process.env.NEXT_PUBLIC_ENABLE_META_WRITES,
   metaClientWritesReady: process.env.NEXT_PUBLIC_META_CLIENT_WRITES_READY
@@ -107,46 +109,82 @@ export const demoAdapter: ClientApiAdapter = {
   updateSyncJob: (accountId, id, patch) => demoProvider.updateSyncJob(accountId, id, patch)
 };
 
-export const liveAdapter: ClientApiAdapter = {
+export function createLiveAdapter(snapshot: LiveSnapshot | null): ClientApiAdapter {
+  const data: LiveSnapshot = snapshot ?? { accounts: [], entities: [], creatives: [], reportRows: [], syncJobs: [] };
+  return {
   mode: "live",
   sourceLabel: "Live Meta API",
-  listAdAccounts: () => liveAccountList(),
-  getKpis: () => [],
-  listEntities: () => [],
-  updateStatus: () => [],
-  updateBudget: () => [],
-  updateEntity: () => null,
-  createAdBundle: () => liveBlockedBundle,
-  duplicateEntities: () => [],
+  listAdAccounts: () => data.accounts,
+  getKpis: () => liveKpis(data.reportRows),
+  listEntities: (level, accountId, query = "") => data.entities.filter((entity) => entity.level === level && entity.accountId === accountId && entity.name.toLowerCase().includes(query.toLowerCase())),
+  updateStatus: (level, accountId, ids, status) => {
+    for (const id of ids) {
+      queueOperation(accountId, status === "active" ? "enable" : "pause", { objectMetaId: id, objectType: level });
+    }
+    return data.entities.map((entity) => (entity.level === level && entity.accountId === accountId && ids.includes(entity.id) ? { ...entity, status } : entity));
+  },
+  updateBudget: (level, accountId, ids, dailyBudget) => {
+    for (const id of ids) {
+      queueOperation(accountId, "update-budget", { objectMetaId: id, objectType: level, dailyBudgetMinor: dailyBudget });
+    }
+    return data.entities.map((entity) => (entity.level === level && entity.accountId === accountId && ids.includes(entity.id) ? { ...entity, budget: String(dailyBudget) } : entity));
+  },
+  updateEntity: (level, accountId, id, input) => {
+    queueOperation(accountId, "update-budget", { objectMetaId: id, objectType: level, name: input.name, status: input.status === "active" ? "ACTIVE" : "PAUSED", dailyBudgetMinor: parseBudgetMinor(input.budget) });
+    return data.entities.find((entity) => entity.level === level && entity.accountId === accountId && entity.id === id) ?? null;
+  },
+  createAdBundle: (accountId, input) => {
+    queueOperation(accountId, "create-bundle", input);
+    return liveBlockedBundle;
+  },
+  duplicateEntities: (level, accountId, ids) => {
+    for (const id of ids) {
+      queueOperation(accountId, "duplicate", { objectMetaId: id, objectType: level });
+    }
+    return data.entities.filter((entity) => entity.level === level && entity.accountId === accountId && ids.includes(entity.id));
+  },
   markEntities: () => [],
   touchEntities: () => [],
-  listCreatives: () => [],
-  createCreative: () => null,
-  duplicateCreative: () => null,
+  listCreatives: (accountId, query = "", type = "全部") => data.creatives.filter((creative) => creative.accountId === accountId && creative.title.toLowerCase().includes(query.toLowerCase()) && (type === "全部" || creative.type === type)),
+  createCreative: (accountId) => {
+    queueOperation(accountId, "create-creative", {
+      name: `Live Creative ${new Date().toISOString().slice(0, 10)}`,
+      objectStorySpecJson: {}
+    });
+    return null;
+  },
+  duplicateCreative: (accountId, id) => {
+    queueOperation(accountId, "duplicate", { objectMetaId: id, objectType: "creative" });
+    return null;
+  },
   archiveCreative: () => [],
-  listReportRows: () => [],
-  exportReportCsv: () => "",
-  listSyncJobs: () => [],
-  enqueueSyncJob: (accountId) => ({
-    accountId,
-    id: "live-sync-not-configured",
-    type: "Live sync",
-    scope: "Meta Graph API",
-    status: "queued",
-    progress: "0%",
-    startedAt: "-",
-    elapsed: "-",
-    requestId: "live-adapter-skeleton"
-  }),
+  listReportRows: () => data.reportRows,
+  exportReportCsv: () => reportRowsToCsv(data.reportRows),
+  listSyncJobs: (accountId) => data.syncJobs.filter((job) => job.accountId === accountId),
+  enqueueSyncJob: (accountId) => {
+    queueSync(accountId, "sync-entities");
+    return {
+      accountId,
+      id: `live-sync-${Date.now()}`,
+      type: "sync-entities",
+      scope: "meta-sync",
+      status: "queued",
+      progress: "0%",
+      startedAt: new Date().toISOString(),
+      elapsed: "-",
+      requestId: "pending"
+    };
+  },
   updateSyncJob: () => []
 };
+}
 
 export function resolveInitialDataMode(): ClientDataMode {
   return clientEnv.dataMode === "live" ? "live" : "demo";
 }
 
-export function getClientApiAdapter(mode: ClientDataMode): ClientApiAdapter {
-  return mode === "live" ? liveAdapter : demoAdapter;
+export function getClientApiAdapter(mode: ClientDataMode, liveSnapshot: LiveSnapshot | null = null): ClientApiAdapter {
+  return mode === "live" ? createLiveAdapter(liveSnapshot) : demoAdapter;
 }
 
 export function getClientApiConnection(mode: ClientDataMode): ClientApiConnection {
@@ -169,7 +207,7 @@ export function getClientApiConnection(mode: ClientDataMode): ClientApiConnectio
     return {
       mode,
       state: "unconfigured",
-      sourceLabel: liveAdapter.sourceLabel,
+      sourceLabel: "Live Meta API",
       canRead: false,
       canWrite: false,
       missingItems,
@@ -183,7 +221,7 @@ export function getClientApiConnection(mode: ClientDataMode): ClientApiConnectio
     return {
       mode,
       state: "readonly",
-      sourceLabel: liveAdapter.sourceLabel,
+      sourceLabel: "Live Meta API",
       canRead: true,
       canWrite: false,
       missingItems,
@@ -197,7 +235,7 @@ export function getClientApiConnection(mode: ClientDataMode): ClientApiConnectio
     return {
       mode,
       state: "write-disabled",
-      sourceLabel: liveAdapter.sourceLabel,
+      sourceLabel: "Live Meta API",
       canRead: true,
       canWrite: false,
       missingItems,
@@ -210,7 +248,7 @@ export function getClientApiConnection(mode: ClientDataMode): ClientApiConnectio
   return {
     mode,
     state: "live-ready",
-    sourceLabel: liveAdapter.sourceLabel,
+    sourceLabel: "Live Meta API",
     canRead: true,
     canWrite: true,
     missingItems,
@@ -222,32 +260,11 @@ export function getClientApiConnection(mode: ClientDataMode): ClientApiConnectio
 
 export function getMissingMetaRequirements(): MissingMetaRequirement[] {
   const missing: MissingMetaRequirement[] = [];
-  if (!hasValue(clientEnv.metaAppId)) {
-    missing.push({
-      id: "meta-app-id",
-      label: "NEXT_PUBLIC_META_APP_ID",
-      detail: "Public Meta app id is required before Live mode can identify the app."
-    });
-  }
-  if (!hasValue(clientEnv.metaBusinessId)) {
-    missing.push({
-      id: "meta-business-id",
-      label: "NEXT_PUBLIC_META_BUSINESS_ID",
-      detail: "Business id is required to scope Live onboarding and account selection."
-    });
-  }
-  if (!hasValue(clientEnv.metaAdAccountId)) {
-    missing.push({
-      id: "meta-ad-account-id",
-      label: "NEXT_PUBLIC_META_AD_ACCOUNT_ID",
-      detail: "A target ad account id is required before Live pages can query data."
-    });
-  }
   if (!isEnabled(clientEnv.metaConfigured)) {
     missing.push({
       id: "server-meta-credentials",
-      label: "META_ACCESS_TOKEN / META_APP_SECRET",
-      detail: "Server-side Meta credentials must be confirmed through NEXT_PUBLIC_META_CONFIGURED=true."
+      label: "META_APP_ID / META_APP_SECRET",
+      detail: "Server-side Meta OAuth credentials must be confirmed through NEXT_PUBLIC_META_CONFIGURED=true."
     });
   }
   return missing;
@@ -257,27 +274,53 @@ export function writeBlockedMessage(connection: ClientApiConnection): string {
   return connection.writeBlockedReason || "Writes are disabled for the selected data source.";
 }
 
-function liveAccountList(): AdAccount[] {
-  if (!hasValue(clientEnv.metaAdAccountId)) return [];
+function reportRowsToCsv(rows: ReportRow[]): string {
   return [
-    {
-      id: clientEnv.metaAdAccountId,
-      name: clientEnv.metaAdAccountName || "Live Meta Account",
-      maskedId: maskAccountId(clientEnv.metaAdAccountId),
-      currency: clientEnv.metaCurrency === "KRW" ? "KRW" : "USD",
-      timezone: clientEnv.metaTimezone || "UTC",
-      status: "healthy"
-    }
+    "date,platform,spend,impressions,clicks,purchases,roas",
+    ...rows.map((row) => [row.date, row.platform, row.spend, row.impressions, row.clicks, row.purchases, row.roas].map((value) => `"${value.replaceAll("\"", "\"\"")}"`).join(","))
+  ].join("\n");
+}
+
+function liveKpis(rows: ReportRow[]): KpiMetric[] {
+  const spend = rows.reduce((sum, row) => sum + parseMetric(row.spend), 0);
+  const impressions = rows.reduce((sum, row) => sum + parseMetric(row.impressions), 0);
+  const clicks = rows.reduce((sum, row) => sum + parseMetric(row.clicks), 0);
+  const purchases = rows.reduce((sum, row) => sum + parseMetric(row.purchases), 0);
+  const roas = rows.length > 0 ? rows.reduce((sum, row) => sum + parseMetric(row.roas), 0) / rows.length : 0;
+  return [
+    { label: "Spend", value: String(Math.round(spend)), delta: "Live DB", direction: "up", note: "Synced from database", accent: true },
+    { label: "Impressions", value: String(Math.round(impressions)), delta: "Live DB", direction: "up", note: "Synced from database" },
+    { label: "Clicks", value: String(Math.round(clicks)), delta: "Live DB", direction: "up", note: "Synced from database" },
+    { label: "Purchases", value: String(Math.round(purchases)), delta: roas.toFixed(2), direction: "up", note: "Average ROAS" }
   ];
 }
 
-function maskAccountId(value: string): string {
-  if (value.length <= 8) return value;
-  return `${value.slice(0, 4)}...${value.slice(-4)}`;
+function queueOperation(adAccountId: string, type: string, payload: Record<string, unknown>): void {
+  if (typeof window === "undefined") return;
+  void fetch("/api/operations", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ adAccountId, type, payload, confirmed: true })
+  }).catch(() => undefined);
 }
 
-function hasValue(value: string | undefined): value is string {
-  return Boolean(value?.trim());
+function queueSync(accountId: string, type: string): void {
+  if (typeof window === "undefined") return;
+  void fetch(`/api/ad-accounts/${encodeURIComponent(accountId)}/sync`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ type })
+  }).catch(() => undefined);
+}
+
+function parseMetric(value: string): number {
+  const parsed = Number(value.replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseBudgetMinor(value: string): number | undefined {
+  const parsed = parseMetric(value);
+  return parsed > 0 ? Math.round(parsed) : undefined;
 }
 
 function isEnabled(value: string | undefined): boolean {
