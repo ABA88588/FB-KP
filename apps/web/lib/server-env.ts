@@ -30,6 +30,5 @@ const requiredEnvKeys = [
   "DATABASE_URL",
   "REDIS_URL",
   "AUTH_SECRET",
-  "TOKEN_ENCRYPTION_KEY",
-  "META_OAUTH_REDIRECT_URI"
+  "TOKEN_ENCRYPTION_KEY"
 ] as const;

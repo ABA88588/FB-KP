@@ -2,6 +2,7 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { ServerEnv } from "@adflow/shared";
 
 export const metaOAuthCookieName = "adflow_meta_oauth_state";
+export const metaOAuthScopes = ["ads_read", "ads_management", "business_management", "pages_read_engagement", "instagram_basic"] as const;
 
 export function createOAuthState(authSecret: string): { state: string; cookieValue: string } {
   const state = randomBytes(24).toString("base64url");
@@ -25,7 +26,7 @@ export function buildMetaOAuthUrl(env: ServerEnv, state: string): URL {
   url.searchParams.set("redirect_uri", env.META_OAUTH_REDIRECT_URI);
   url.searchParams.set("state", state);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", ["ads_read", "ads_management", "business_management", "pages_read_engagement", "instagram_basic"].join(","));
+  url.searchParams.set("scope", metaOAuthScopes.join(","));
   return url;
 }
 

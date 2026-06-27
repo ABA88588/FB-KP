@@ -95,16 +95,18 @@ function extractErrorDetails(error: unknown): ErrorDetails {
   if (error instanceof Error) {
     const record = error as Error & {
       readonly code?: unknown;
+      readonly meta?: unknown;
       readonly status?: unknown;
       readonly statusCode?: unknown;
       readonly retryable?: unknown;
     };
+    const meta = asErrorMeta(record.meta);
 
     return {
       message: error.message,
-      code: typeof record.code === "string" ? record.code : null,
+      code: typeof record.code === "string" ? record.code : meta?.internalCode ?? null,
       statusCode: coerceStatusCode(record.statusCode ?? record.status),
-      retryable: typeof record.retryable === "boolean" ? record.retryable : null
+      retryable: typeof record.retryable === "boolean" ? record.retryable : meta?.retryable ?? null
     };
   }
 
@@ -112,16 +114,18 @@ function extractErrorDetails(error: unknown): ErrorDetails {
     const record = error as {
       readonly message?: unknown;
       readonly code?: unknown;
+      readonly meta?: unknown;
       readonly status?: unknown;
       readonly statusCode?: unknown;
       readonly retryable?: unknown;
     };
+    const meta = asErrorMeta(record.meta);
 
     return {
       message: typeof record.message === "string" ? record.message : "Unknown object error",
-      code: typeof record.code === "string" ? record.code : null,
+      code: typeof record.code === "string" ? record.code : meta?.internalCode ?? null,
       statusCode: coerceStatusCode(record.statusCode ?? record.status),
-      retryable: typeof record.retryable === "boolean" ? record.retryable : null
+      retryable: typeof record.retryable === "boolean" ? record.retryable : meta?.retryable ?? null
     };
   }
 
@@ -144,4 +148,13 @@ function coerceStatusCode(value: unknown): number | null {
   }
 
   return null;
+}
+
+function asErrorMeta(value: unknown): { internalCode: string | null; retryable: boolean | null } | null {
+  if (typeof value !== "object" || value === null) return null;
+  const record = value as { readonly internalCode?: unknown; readonly retryable?: unknown };
+  return {
+    internalCode: typeof record.internalCode === "string" ? record.internalCode : null,
+    retryable: typeof record.retryable === "boolean" ? record.retryable : null
+  };
 }

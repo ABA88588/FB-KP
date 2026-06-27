@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowDownRight, ArrowUpRight, Check, Info, Loader2, X } 
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cn, effectiveStatusTone, type DataState } from "@adflow/shared";
 import type { KpiMetric } from "@adflow/meta-client";
+import { appPath } from "@/lib/app-paths";
 import type { ClientApiConnection, MissingMetaRequirement } from "@/lib/client-api-adapter";
 
 export function Button({
@@ -42,7 +43,7 @@ export function DemoModeBanner() {
     <div className="demo-banner">
       <span className="demo-badge">演示数据</span>
       当前页面使用确定性模拟数据，不会向 Meta 创建或修改任何对象。
-      <a href="/settings/connections">查看连接</a>
+      <a href={appPath("/settings/connections")}>查看连接</a>
     </div>
   );
 }
@@ -54,7 +55,7 @@ export function DataSourceBanner({ connection }: { connection: ClientApiConnecti
     <div className={cn("demo-banner", "live-banner", tone)}>
       <span className="demo-badge">{connection.stateLabel}</span>
       {connection.stateDetail}
-      <a href="/settings/connections">查看连接</a>
+      <a href={appPath("/settings/connections")}>查看连接</a>
     </div>
   );
 }

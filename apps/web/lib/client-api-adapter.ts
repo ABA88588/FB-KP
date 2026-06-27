@@ -14,6 +14,7 @@ import {
   type SyncJob,
   type UpdateEntityInput
 } from "@adflow/meta-client";
+import { apiPath } from "@/lib/app-paths";
 
 export type ClientDataMode = "demo" | "live";
 export type ConnectionState = "demo" | "live-ready" | "unconfigured" | "readonly" | "write-disabled";
@@ -297,7 +298,7 @@ function liveKpis(rows: ReportRow[]): KpiMetric[] {
 
 function queueOperation(adAccountId: string, type: string, payload: Record<string, unknown>): void {
   if (typeof window === "undefined") return;
-  void fetch("/api/operations", {
+  void fetch(apiPath("/api/operations"), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ adAccountId, type, payload, confirmed: true })
@@ -306,7 +307,7 @@ function queueOperation(adAccountId: string, type: string, payload: Record<strin
 
 function queueSync(accountId: string, type: string): void {
   if (typeof window === "undefined") return;
-  void fetch(`/api/ad-accounts/${encodeURIComponent(accountId)}/sync`, {
+  void fetch(apiPath(`/api/ad-accounts/${encodeURIComponent(accountId)}/sync`), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ type })

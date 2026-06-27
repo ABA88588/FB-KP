@@ -4,6 +4,7 @@ import { prisma } from "@adflow/db";
 import { createRequestId } from "@adflow/shared";
 import { hashPassword, verifyPassword } from "./password";
 import { sessionCookieName } from "./server-auth";
+import { appBasePath } from "./app-paths";
 
 export const authCredentialsSchema = z.object({
   email: z.string().trim().email().transform((value) => value.toLowerCase()),
@@ -98,7 +99,7 @@ export function sessionCookieOptions(expiresAt: Date) {
     httpOnly: true,
     secure: shouldUseSecureCookies(),
     sameSite: "lax" as const,
-    path: "/",
+    path: appBasePath || "/",
     expires: expiresAt
   };
 }
@@ -108,7 +109,7 @@ export function expiredSessionCookieOptions() {
     httpOnly: true,
     secure: shouldUseSecureCookies(),
     sameSite: "lax" as const,
-    path: "/",
+    path: appBasePath || "/",
     maxAge: 0
   };
 }

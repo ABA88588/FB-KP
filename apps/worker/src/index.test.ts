@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import { MetaApiError, normalizeMetaError } from "@adflow/meta-client";
 import { calculateBoundedBackoffMs, shouldRetryJobFailure } from "./queues/retry.js";
 import { parseWorkerJobData } from "./queues/schemas.js";
 import { QUEUE_NAMES } from "./queues/names.js";
+import { errorJson } from "./processors/service-context.js";
 
 const baseJob = {
   jobVersion: 1,
@@ -54,5 +56,44 @@ describe("bounded retry helper", () => {
     expect(shouldRetryJobFailure({ retryable: false }, 1)).toBe(false);
     expect(shouldRetryJobFailure({ statusCode: 429 }, 5)).toBe(false);
     expect(shouldRetryJobFailure({ statusCode: 429 }, 1)).toBe(true);
+  });
+
+  it("retries normalized Meta rate-limit errors", () => {
+    const error = new MetaApiError(429, "req_meta_1", normalizeMetaError({
+      error: {
+        message: "Too many calls",
+        code: 4,
+        error_subcode: 80004,
+        fbtrace_id: "trace_1"
+      }
+    }, 429));
+
+    expect(shouldRetryJobFailure(error, 1)).toBe(true);
+  });
+});
+
+describe("worker Meta error metadata", () => {
+  it("keeps Meta code, subcode, and fbtrace id for persistence", () => {
+    const error = new MetaApiError(429, "req_meta_1", normalizeMetaError({
+      error: {
+        message: "Too many calls",
+        code: 4,
+        error_subcode: 80004,
+        fbtrace_id: "trace_1"
+      }
+    }, 429));
+
+    expect(errorJson(error)).toEqual({
+      message: "Too many calls",
+      retryable: true,
+      meta: {
+        status: 429,
+        requestId: "req_meta_1",
+        code: 4,
+        subcode: 80004,
+        fbtraceId: "trace_1",
+        internalCode: "META_RATE_LIMITED"
+      }
+    });
   });
 });

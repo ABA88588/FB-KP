@@ -1,12 +1,14 @@
-import type { Job } from "bullmq";
+import { UnrecoverableError, type Job } from "bullmq";
 
 import type { ProcessorContext } from "./context.js";
 import { QUEUE_NAMES } from "../queues/names.js";
 import { parseWorkerJobData } from "../queues/schemas.js";
 import { prisma } from "@adflow/db";
-import { evaluateMetaMutationGuard } from "@adflow/meta-client";
+import { evaluateMetaMutationGuard, type MetaMutationResult } from "@adflow/meta-client";
 import { parseServerEnv, safeErrorMessage } from "@adflow/shared";
-import { createProvider, getAccessToken, toBigInt, writeAudit } from "./service-context.js";
+import { createProvider, errorJson, getAccessToken, toBigInt, toNullablePrismaJson, toPrismaJson, writeAudit, writeMetaApiLog } from "./service-context.js";
+
+type OperationResult = MetaMutationResult & Record<string, unknown>;
 
 export function createMutationsProcessor(context: ProcessorContext) {
   return async (job: Job<unknown, unknown, string>): Promise<{ operationId: string; metaId?: string }> => {
@@ -20,13 +22,27 @@ export function createMutationsProcessor(context: ProcessorContext) {
       return { operationId: payload.mutationRequestIds?.[0] ?? data.idempotencyKey, metaId: String(results.length) };
     }
     if (!payload.mutationRequestId) throw new Error("mutationRequestId is required.");
-    return applyOperation(payload.mutationRequestId, data, context);
+    return applyOperation(payload.mutationRequestId, data, context, payload.mutationType);
   };
 }
 
-async function applyOperation(operationId: string, data: ReturnType<typeof parseWorkerJobData>, context: ProcessorContext): Promise<{ operationId: string; metaId?: string }> {
+async function applyOperation(operationId: string, data: ReturnType<typeof parseWorkerJobData>, context: ProcessorContext, expectedMutationType?: string): Promise<{ operationId: string; metaId?: string }> {
+  const startedAt = Date.now();
   const env = parseServerEnv(process.env);
   const operation = await prisma.operation.findUniqueOrThrow({ where: { id: operationId } });
+  if (operation.organizationId !== data.organizationId || operation.adAccountId !== data.adAccountId || operation.connectionId !== data.connectionId) {
+    throw new Error("Mutation operation does not match the worker job account, connection, or organization.");
+  }
+  if (expectedMutationType !== undefined && expectedMutationType !== operation.type) {
+    throw new Error(`Mutation operation type mismatch: expected ${expectedMutationType}, found ${operation.type}.`);
+  }
+  if (operation.status === "SUCCEEDED") {
+    const metaId = readMetaId(operation.resultJson) ?? readMetaId(operation.metaObjectIdsJson);
+    return metaId === undefined ? { operationId: operation.id } : { operationId: operation.id, metaId };
+  }
+  if (operation.status === "CANCELLED" || operation.status === "UNKNOWN_OUTCOME") {
+    throw new UnrecoverableError(`Mutation operation ${operation.id} is ${operation.status}.`);
+  }
   const [account, connection, membership] = await Promise.all([
     prisma.adAccount.findUniqueOrThrow({ where: { id: operation.adAccountId } }),
     prisma.metaConnection.findUniqueOrThrow({ where: { id: operation.connectionId } }),
@@ -41,19 +57,20 @@ async function applyOperation(operationId: string, data: ReturnType<typeof parse
     scopes: connection.scopes,
     accountReadOnly: account.isReadOnly,
     connectionHealthy: connection.status === "HEALTHY"
-  }, operation.requestId);
+  }, operation.id);
   if (!guard.allowed) {
     await prisma.operation.update({ where: { id: operation.id }, data: { status: "FAILED", errorJson: { reasons: guard.reasons }, completedAt: new Date() } });
     await writeAudit({ organizationId: operation.organizationId, actorUserId: operation.actorUserId ?? undefined, action: `meta.write.${operation.type}`, resourceType: "Operation", resourceId: operation.id, outcome: "DENIED", requestId: operation.requestId, summaryJson: { reasons: guard.reasons } });
+    await writeMetaApiLog({ organizationId: operation.organizationId, operation: `meta.write.${operation.type}`, requestId: operation.requestId, startedAt, outcome: "DENIED" });
     throw new Error(`Meta write denied: ${guard.reasons.join(", ")}`);
   }
 
-  await prisma.operation.update({ where: { id: operation.id }, data: { status: "RUNNING", startedAt: new Date() } });
+  await prisma.operation.update({ where: { id: operation.id }, data: { status: "RUNNING", startedAt: new Date(), attemptCount: { increment: 1 } } });
   try {
     const accessToken = await getAccessToken(operation.connectionId);
     const provider = createProvider();
     const payload = operation.payloadJson as Record<string, unknown>;
-    let result;
+    let result: OperationResult;
     switch (operation.type) {
       case "create-bundle": {
         const campaignName = stringFromUnknown(payload.campaignName ?? payload.name, "Untitled Campaign");
@@ -72,7 +89,7 @@ async function applyOperation(operationId: string, data: ReturnType<typeof parse
           objective: campaignObjective,
           buyingType: "AUCTION",
           specialAdCategories: [],
-          operationId: operation.requestId,
+          operationId: operation.id,
           guard,
           ...(bundleBudgetMinor !== undefined ? { dailyBudgetMinor: bundleBudgetMinor } : {})
         });
@@ -99,7 +116,7 @@ async function applyOperation(operationId: string, data: ReturnType<typeof parse
           billingEvent,
           targetingJson: JSON.stringify(payload.targetingJson ?? { audience: payload.audience ?? "all" }),
           promotedObjectJson: JSON.stringify(payload.promotedObjectJson ?? { custom_event_type: payload.event ?? "OTHER" }),
-          operationId: operation.requestId,
+          operationId: operation.id,
           guard,
           ...(bundleBudgetMinor !== undefined ? { dailyBudgetMinor: bundleBudgetMinor } : {})
         });
@@ -128,7 +145,7 @@ async function applyOperation(operationId: string, data: ReturnType<typeof parse
               link: destinationUrl
             }
           }),
-          operationId: operation.requestId,
+          operationId: operation.id,
           guard,
           ...(payload.assetFeedSpecJson !== undefined ? { assetFeedSpecJson: JSON.stringify(payload.assetFeedSpecJson) } : {})
         });
@@ -149,7 +166,7 @@ async function applyOperation(operationId: string, data: ReturnType<typeof parse
           adSetMetaId: adSetResult.metaId,
           creativeMetaId: creativeResult.metaId,
           name: adName,
-          operationId: operation.requestId,
+          operationId: operation.id,
           guard
         });
         await prisma.ad.create({
@@ -171,7 +188,7 @@ async function applyOperation(operationId: string, data: ReturnType<typeof parse
           }
         });
         result = {
-          operationId: operation.requestId,
+          operationId: operation.id,
           status: "PAUSED",
           metaId: adResult.metaId,
           campaignMetaId: campaignResult.metaId,
@@ -191,11 +208,15 @@ async function applyOperation(operationId: string, data: ReturnType<typeof parse
           objective: campaignObjective,
           buyingType,
           specialAdCategories: Array.isArray(payload.specialAdCategories) ? payload.specialAdCategories.map(String) : [],
-          operationId: operation.requestId,
+          operationId: operation.id,
           guard,
           ...(campaignDailyBudgetMinor !== undefined ? { dailyBudgetMinor: campaignDailyBudgetMinor } : {})
         });
-        await prisma.campaign.create({ data: { organizationId: operation.organizationId, adAccountId: operation.adAccountId, metaId: result.metaId, name: campaignName, objective: campaignObjective, configuredStatus: "PAUSED", effectiveStatus: "PAUSED", dailyBudgetMinor: toBigInt(numberOrUndefined(payload.dailyBudgetMinor)), specialAdCategories: [], rawJson: result, sourceLastSeenAt: new Date() } });
+        await prisma.campaign.upsert({
+          where: { organizationId_adAccountId_metaId: { organizationId: operation.organizationId, adAccountId: operation.adAccountId, metaId: result.metaId } },
+          create: { organizationId: operation.organizationId, adAccountId: operation.adAccountId, metaId: result.metaId, name: campaignName, objective: campaignObjective, configuredStatus: "PAUSED", effectiveStatus: "PAUSED", dailyBudgetMinor: toBigInt(numberOrUndefined(payload.dailyBudgetMinor)), specialAdCategories: [], rawJson: toPrismaJson(result), sourceLastSeenAt: new Date() },
+          update: { name: campaignName, objective: campaignObjective, configuredStatus: "PAUSED", effectiveStatus: "PAUSED", dailyBudgetMinor: toBigInt(numberOrUndefined(payload.dailyBudgetMinor)), rawJson: toPrismaJson(result), sourceLastSeenAt: new Date(), isDeletedAtSource: false }
+        });
         break;
       }
       case "create-adset": {
@@ -212,11 +233,16 @@ async function applyOperation(operationId: string, data: ReturnType<typeof parse
           billingEvent,
           targetingJson: JSON.stringify(payload.targetingJson ?? {}),
           promotedObjectJson: JSON.stringify(payload.promotedObjectJson ?? {}),
-          operationId: operation.requestId,
+          operationId: operation.id,
           guard,
           ...(adSetDailyBudgetMinor !== undefined ? { dailyBudgetMinor: adSetDailyBudgetMinor } : {})
         });
-        await prisma.adSet.create({ data: { organizationId: operation.organizationId, adAccountId: operation.adAccountId, metaId: result.metaId, campaignMetaId, name: adSetName, configuredStatus: "PAUSED", effectiveStatus: "PAUSED", dailyBudgetMinor: toBigInt(numberOrUndefined(payload.dailyBudgetMinor)), rawJson: result, sourceLastSeenAt: new Date() } });
+        const campaign = await prisma.campaign.findFirst({ where: { organizationId: operation.organizationId, adAccountId: operation.adAccountId, metaId: campaignMetaId } });
+        await prisma.adSet.upsert({
+          where: { organizationId_adAccountId_metaId: { organizationId: operation.organizationId, adAccountId: operation.adAccountId, metaId: result.metaId } },
+          create: { organizationId: operation.organizationId, adAccountId: operation.adAccountId, campaignId: campaign?.id ?? null, metaId: result.metaId, campaignMetaId, name: adSetName, configuredStatus: "PAUSED", effectiveStatus: "PAUSED", dailyBudgetMinor: toBigInt(numberOrUndefined(payload.dailyBudgetMinor)), rawJson: toPrismaJson(result), sourceLastSeenAt: new Date() },
+          update: { campaignId: campaign?.id ?? null, name: adSetName, configuredStatus: "PAUSED", effectiveStatus: "PAUSED", dailyBudgetMinor: toBigInt(numberOrUndefined(payload.dailyBudgetMinor)), rawJson: toPrismaJson(result), sourceLastSeenAt: new Date(), isDeletedAtSource: false }
+        });
         break;
       }
       case "create-creative":
@@ -224,11 +250,15 @@ async function applyOperation(operationId: string, data: ReturnType<typeof parse
           adAccountMetaId: account.metaId,
           name: stringFromUnknown(payload.name, "Untitled Creative"),
           objectStorySpecJson: JSON.stringify(payload.objectStorySpecJson ?? {}),
-          operationId: operation.requestId,
+          operationId: operation.id,
           guard,
           ...(payload.assetFeedSpecJson !== undefined ? { assetFeedSpecJson: JSON.stringify(payload.assetFeedSpecJson) } : {})
         });
-        await prisma.creative.create({ data: { organizationId: operation.organizationId, adAccountId: operation.adAccountId, metaId: result.metaId, name: stringFromUnknown(payload.name, "Untitled Creative"), status: "PAUSED", rawJson: result, sourceLastSeenAt: new Date() } });
+        await prisma.creative.upsert({
+          where: { organizationId_adAccountId_metaId: { organizationId: operation.organizationId, adAccountId: operation.adAccountId, metaId: result.metaId } },
+          create: { organizationId: operation.organizationId, adAccountId: operation.adAccountId, metaId: result.metaId, name: stringFromUnknown(payload.name, "Untitled Creative"), status: "PAUSED", rawJson: toPrismaJson(result), sourceLastSeenAt: new Date() },
+          update: { name: stringFromUnknown(payload.name, "Untitled Creative"), status: "PAUSED", rawJson: toPrismaJson(result), sourceLastSeenAt: new Date(), isDeletedAtSource: false }
+        });
         break;
       case "create-ad": {
         const campaignMetaId = stringFromUnknown(payload.campaignMetaId, "");
@@ -240,10 +270,19 @@ async function applyOperation(operationId: string, data: ReturnType<typeof parse
           adSetMetaId,
           creativeMetaId,
           name: adName,
-          operationId: operation.requestId,
+          operationId: operation.id,
           guard
         });
-        await prisma.ad.create({ data: { organizationId: operation.organizationId, adAccountId: operation.adAccountId, metaId: result.metaId, campaignMetaId, adSetMetaId, creativeMetaId, name: adName, configuredStatus: "PAUSED", effectiveStatus: "PAUSED", rawJson: result, sourceLastSeenAt: new Date() } });
+        const [campaign, adSet, creative] = await Promise.all([
+          prisma.campaign.findFirst({ where: { organizationId: operation.organizationId, adAccountId: operation.adAccountId, metaId: campaignMetaId } }),
+          prisma.adSet.findFirst({ where: { organizationId: operation.organizationId, adAccountId: operation.adAccountId, metaId: adSetMetaId } }),
+          prisma.creative.findFirst({ where: { organizationId: operation.organizationId, adAccountId: operation.adAccountId, metaId: creativeMetaId } })
+        ]);
+        await prisma.ad.upsert({
+          where: { organizationId_adAccountId_metaId: { organizationId: operation.organizationId, adAccountId: operation.adAccountId, metaId: result.metaId } },
+          create: { organizationId: operation.organizationId, adAccountId: operation.adAccountId, campaignId: campaign?.id ?? null, adSetId: adSet?.id ?? null, creativeId: creative?.id ?? null, metaId: result.metaId, campaignMetaId, adSetMetaId, creativeMetaId, name: adName, configuredStatus: "PAUSED", effectiveStatus: "PAUSED", rawJson: toPrismaJson(result), sourceLastSeenAt: new Date() },
+          update: { campaignId: campaign?.id ?? null, adSetId: adSet?.id ?? null, creativeId: creative?.id ?? null, name: adName, configuredStatus: "PAUSED", effectiveStatus: "PAUSED", rawJson: toPrismaJson(result), sourceLastSeenAt: new Date(), isDeletedAtSource: false }
+        });
         break;
       }
       case "pause":
@@ -257,7 +296,7 @@ async function applyOperation(operationId: string, data: ReturnType<typeof parse
         result = await provider.updateObject({ accessToken, requestId: operation.requestId }, {
           objectMetaId,
           objectType,
-          operationId: operation.requestId,
+          operationId: operation.id,
           guard,
           ...(requestedName !== undefined ? { name: requestedName } : {}),
           ...(requestedStatus !== undefined ? { status: requestedStatus } : {}),
@@ -274,24 +313,43 @@ async function applyOperation(operationId: string, data: ReturnType<typeof parse
         });
         break;
       }
-      case "duplicate":
+      case "duplicate": {
+        const objectType = (payload.objectType as "campaign" | "adset" | "ad") ?? "campaign";
+        const objectMetaId = stringFromUnknown(payload.objectMetaId, "");
         result = await provider.duplicateObject({ accessToken, requestId: operation.requestId }, {
-          objectMetaId: stringFromUnknown(payload.objectMetaId, ""),
-          objectType: (payload.objectType as "campaign" | "adset" | "ad") ?? "campaign",
-          operationId: operation.requestId,
+          objectMetaId,
+          objectType,
+          operationId: operation.id,
           guard
         });
+        await duplicateLocalMetaObject({
+          organizationId: operation.organizationId,
+          adAccountId: operation.adAccountId,
+          objectType,
+          sourceMetaId: objectMetaId,
+          newMetaId: result.metaId,
+          result
+        });
         break;
+      }
       default:
         throw new Error(`Unsupported mutation type: ${operation.type}`);
     }
-    await prisma.operation.update({ where: { id: operation.id }, data: { status: "SUCCEEDED", resultJson: result, metaObjectIdsJson: { metaId: result.metaId }, completedAt: new Date() } });
-    await writeAudit({ organizationId: operation.organizationId, actorUserId: operation.actorUserId ?? undefined, action: `meta.write.${operation.type}`, resourceType: "Operation", resourceId: operation.id, outcome: "SUCCESS", requestId: operation.requestId, afterJson: result });
+    const storedResult = withMetaRequestDetails(result, operation.id, operation.requestId, account.metaId);
+    await prisma.operation.update({ where: { id: operation.id }, data: { status: "SUCCEEDED", resultJson: toPrismaJson(storedResult), metaObjectIdsJson: toPrismaJson({ metaId: result.metaId, operationId: operation.id }), completedAt: new Date() } });
+    await writeMetaApiLog({ organizationId: operation.organizationId, operation: `meta.write.${operation.type}`, requestId: operation.requestId, startedAt, outcome: "SUCCESS" });
+    await writeAudit({ organizationId: operation.organizationId, actorUserId: operation.actorUserId ?? undefined, action: `meta.write.${operation.type}`, resourceType: "Operation", resourceId: operation.id, outcome: "SUCCESS", requestId: operation.requestId, afterJson: storedResult });
     return { operationId: operation.id, metaId: result.metaId };
   } catch (error) {
+    const details = errorJson(error);
+    const unknownOutcome = isNonIdempotentMutation(operation.type) && details.retryable;
     context.logger.error("mutation processor failed", { error: safeErrorMessage(error) });
-    await prisma.operation.update({ where: { id: operation.id }, data: { status: "FAILED", errorJson: { message: error instanceof Error ? error.message : "Unknown error" }, completedAt: new Date() } });
-    await writeAudit({ organizationId: operation.organizationId, actorUserId: operation.actorUserId ?? undefined, action: `meta.write.${operation.type}`, resourceType: "Operation", resourceId: operation.id, outcome: "FAILED", requestId: operation.requestId });
+    await prisma.operation.update({ where: { id: operation.id }, data: { status: unknownOutcome ? "UNKNOWN_OUTCOME" : "FAILED", errorJson: toPrismaJson({ ...details, operationId: operation.id }), completedAt: new Date() } });
+    await writeMetaApiLog({ organizationId: operation.organizationId, operation: `meta.write.${operation.type}`, requestId: operation.requestId, startedAt, outcome: unknownOutcome ? "UNKNOWN" : "FAILED", error });
+    await writeAudit({ organizationId: operation.organizationId, actorUserId: operation.actorUserId ?? undefined, action: `meta.write.${operation.type}`, resourceType: "Operation", resourceId: operation.id, outcome: unknownOutcome ? "UNKNOWN" : "FAILED", requestId: operation.requestId, summaryJson: { ...details, operationId: operation.id } });
+    if (unknownOutcome) {
+      throw new UnrecoverableError(`Meta mutation ${operation.id} may have reached Meta; marked UNKNOWN_OUTCOME and stopped retries.`);
+    }
     throw error;
   }
 }
@@ -326,6 +384,99 @@ async function updateLocalMetaObject(input: { organizationId: string; adAccountI
     data.effectiveStatus = input.status;
   }
   await prisma.ad.updateMany({ where: { organizationId: input.organizationId, adAccountId: input.adAccountId, metaId: input.objectMetaId }, data });
+}
+
+async function duplicateLocalMetaObject(input: { organizationId: string; adAccountId: string; objectType: "campaign" | "adset" | "ad"; sourceMetaId: string; newMetaId: string; result: OperationResult }): Promise<void> {
+  if (input.objectType === "campaign") {
+    const source = await prisma.campaign.findFirst({ where: { organizationId: input.organizationId, adAccountId: input.adAccountId, metaId: input.sourceMetaId } });
+    await prisma.campaign.upsert({
+      where: { organizationId_adAccountId_metaId: { organizationId: input.organizationId, adAccountId: input.adAccountId, metaId: input.newMetaId } },
+      create: {
+        organizationId: input.organizationId,
+        adAccountId: input.adAccountId,
+        metaId: input.newMetaId,
+        name: source?.name === undefined ? "Duplicated Campaign" : `${source.name} Copy`,
+        objective: source?.objective ?? null,
+        configuredStatus: "PAUSED",
+        effectiveStatus: "PAUSED",
+        dailyBudgetMinor: source?.dailyBudgetMinor ?? null,
+        specialAdCategories: source?.specialAdCategories ?? [],
+        rawJson: toPrismaJson(input.result),
+        sourceLastSeenAt: new Date()
+      },
+      update: { configuredStatus: "PAUSED", effectiveStatus: "PAUSED", rawJson: toPrismaJson(input.result), sourceLastSeenAt: new Date(), isDeletedAtSource: false }
+    });
+    return;
+  }
+  if (input.objectType === "adset") {
+    const source = await prisma.adSet.findFirst({ where: { organizationId: input.organizationId, adAccountId: input.adAccountId, metaId: input.sourceMetaId } });
+    await prisma.adSet.upsert({
+      where: { organizationId_adAccountId_metaId: { organizationId: input.organizationId, adAccountId: input.adAccountId, metaId: input.newMetaId } },
+      create: {
+        organizationId: input.organizationId,
+        adAccountId: input.adAccountId,
+        campaignId: source?.campaignId ?? null,
+        campaignMetaId: source?.campaignMetaId ?? "",
+        metaId: input.newMetaId,
+        name: source?.name === undefined ? "Duplicated Ad Set" : `${source.name} Copy`,
+        configuredStatus: "PAUSED",
+        effectiveStatus: "PAUSED",
+        dailyBudgetMinor: source?.dailyBudgetMinor ?? null,
+        lifetimeBudgetMinor: source?.lifetimeBudgetMinor ?? null,
+        optimizationGoal: source?.optimizationGoal ?? null,
+        billingEvent: source?.billingEvent ?? null,
+        targetingJson: source?.targetingJson ?? toNullablePrismaJson(null),
+        promotedObjectJson: source?.promotedObjectJson ?? toNullablePrismaJson(null),
+        rawJson: toPrismaJson(input.result),
+        sourceLastSeenAt: new Date()
+      },
+      update: { configuredStatus: "PAUSED", effectiveStatus: "PAUSED", rawJson: toPrismaJson(input.result), sourceLastSeenAt: new Date(), isDeletedAtSource: false }
+    });
+    return;
+  }
+  const source = await prisma.ad.findFirst({ where: { organizationId: input.organizationId, adAccountId: input.adAccountId, metaId: input.sourceMetaId } });
+  await prisma.ad.upsert({
+    where: { organizationId_adAccountId_metaId: { organizationId: input.organizationId, adAccountId: input.adAccountId, metaId: input.newMetaId } },
+    create: {
+      organizationId: input.organizationId,
+      adAccountId: input.adAccountId,
+      campaignId: source?.campaignId ?? null,
+      adSetId: source?.adSetId ?? null,
+      creativeId: source?.creativeId ?? null,
+      campaignMetaId: source?.campaignMetaId ?? "",
+      adSetMetaId: source?.adSetMetaId ?? "",
+      creativeMetaId: source?.creativeMetaId ?? null,
+      metaId: input.newMetaId,
+      name: source?.name === undefined ? "Duplicated Ad" : `${source.name} Copy`,
+      configuredStatus: "PAUSED",
+      effectiveStatus: "PAUSED",
+      rawJson: toPrismaJson(input.result),
+      sourceLastSeenAt: new Date()
+    },
+    update: { configuredStatus: "PAUSED", effectiveStatus: "PAUSED", rawJson: toPrismaJson(input.result), sourceLastSeenAt: new Date(), isDeletedAtSource: false }
+  });
+}
+
+function withMetaRequestDetails(result: OperationResult, operationId: string, requestId: string, adAccountMetaId: string): OperationResult {
+  return {
+    ...result,
+    operationId,
+    metaRequest: {
+      operationId,
+      requestId,
+      adAccountMetaId
+    }
+  };
+}
+
+function isNonIdempotentMutation(type: string): boolean {
+  return type === "create-bundle" || type === "create-campaign" || type === "create-adset" || type === "create-creative" || type === "create-ad" || type === "duplicate";
+}
+
+function readMetaId(value: unknown): string | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  return typeof record.metaId === "string" ? record.metaId : undefined;
 }
 
 function numberOrUndefined(value: unknown): number | undefined {

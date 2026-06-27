@@ -20,6 +20,20 @@ test.describe("demo data flows", () => {
     await page.evaluate(() => window.localStorage.clear());
   });
 
+  test("base path and legacy routes redirect into /ads", async ({ page }) => {
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/ads\/login$/);
+
+    await page.goto("/login");
+    await expect(page).toHaveURL(/\/ads\/login$/);
+
+    await page.goto("/campaigns?level=campaign");
+    await expect(page).toHaveURL(/\/ads\/campaigns\?level=campaign$/);
+
+    await page.goto("/ads/settings/meta-app");
+    await expect(page).toHaveURL(/\/ads\/settings\/meta-app$/);
+  });
+
   test("account switch changes overview data", async ({ page }) => {
     await page.goto("/overview");
     const firstMetric = page.getByTestId("kpi-card").first().locator(".metric-value");

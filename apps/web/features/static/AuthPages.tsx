@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Button, ConnectionStateNotice, MissingMetaList } from "@/components/ui";
+import { apiPath } from "@/lib/app-paths";
 import { useDemoContext } from "@/lib/demo-context";
 
 export function LoginPage() {
@@ -20,7 +21,7 @@ export function LoginPage() {
     event.preventDefault();
     setSubmitting(true);
     setStatus("");
-    const endpoint = authMode === "login" ? "/api/auth/login" : "/api/auth/register";
+    const endpoint = authMode === "login" ? apiPath("/api/auth/login") : apiPath("/api/auth/register");
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "content-type": "application/json" },

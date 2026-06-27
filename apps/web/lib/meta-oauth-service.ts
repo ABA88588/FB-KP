@@ -2,8 +2,9 @@ import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { prisma } from "@adflow/db";
 import { MetaHttpClient } from "@adflow/meta-client";
-import { createRequestId, encryptToken, safeErrorMessage, type ServerEnv } from "@adflow/shared";
-import { buildMetaOAuthUrl } from "./meta-oauth";
+import { createRequestId, encryptToken, redactSensitiveText, type ServerEnv } from "@adflow/shared";
+import { buildMetaOAuthUrl, metaOAuthScopes } from "./meta-oauth";
+import { applyMetaAppConfigToEnv, loadMetaAppConfigForServer } from "./meta-app-config";
 import { toPrismaJson } from "./prisma-json";
 
 const tokenResponseSchema = z.object({
@@ -24,39 +25,49 @@ export type OAuthStartInput = {
 };
 
 export async function createPersistentOAuthStart(input: OAuthStartInput): Promise<URL> {
+  const metaConfig = await loadMetaAppConfigForServer(input.organizationId, input.env);
+  const effectiveEnv = applyMetaAppConfigToEnv(input.env, metaConfig);
   const state = randomBytes(24).toString("base64url");
   await prisma.oAuthState.create({
     data: {
       stateHash: hashState(state),
       intent: "meta_connect",
-      returnTo: input.returnTo ?? "/onboarding/meta",
+      returnTo: sanitizeReturnTo(input.returnTo),
       expiresAt: new Date(Date.now() + 10 * 60 * 1000),
       organizationId: input.organizationId,
       userId: input.userId
     }
   });
-  return buildMetaOAuthUrl(input.env, state);
+  return buildMetaOAuthUrl(effectiveEnv, state);
 }
 
 export async function consumeMetaOAuthCallback(input: { env: ServerEnv; code: string; state: string; requestId?: string }) {
   const requestId = input.requestId ?? createRequestId("oauth");
   const stateHash = hashState(input.state);
-  const oauthState = await prisma.oAuthState.findUnique({ where: { stateHash } });
-  if (!oauthState || oauthState.consumedAt || oauthState.expiresAt <= new Date()) {
+  const oauthState = await prisma.$transaction(async (tx) => {
+    const existing = await tx.oAuthState.findUnique({ where: { stateHash } });
+    if (!existing || existing.consumedAt || existing.expiresAt <= new Date()) return null;
+    await tx.oAuthState.update({ where: { id: existing.id }, data: { consumedAt: new Date() } });
+    return existing;
+  });
+  if (!oauthState) {
     throw new Error("Invalid or expired OAuth state.");
   }
 
-  const shortToken = await exchangeCodeForToken(input.env, input.code, requestId);
-  const longToken = await exchangeForLongLivedToken(input.env, shortToken.access_token, requestId);
+  const metaConfig = await loadMetaAppConfigForServer(oauthState.organizationId, input.env);
+  const effectiveEnv = applyMetaAppConfigToEnv(input.env, metaConfig);
+  const shortToken = await exchangeCodeForToken(effectiveEnv, input.code, requestId);
+  const longToken = await exchangeForLongLivedToken(effectiveEnv, shortToken.access_token, requestId);
   const accessToken = longToken.access_token;
   const expiresAt = longToken.expires_in ? new Date(Date.now() + longToken.expires_in * 1000) : null;
-  const encrypted = await encryptToken(accessToken, input.env.TOKEN_ENCRYPTION_KEY_BASE64 || input.env.TOKEN_ENCRYPTION_KEY);
+  const encrypted = await encryptToken(accessToken, effectiveEnv.TOKEN_ENCRYPTION_KEY_BASE64 || effectiveEnv.TOKEN_ENCRYPTION_KEY);
   const client = new MetaHttpClient({
-    appSecret: input.env.META_APP_SECRET,
-    graphApiVersion: input.env.META_GRAPH_API_VERSION
+    appSecret: effectiveEnv.META_APP_SECRET,
+    graphApiVersion: effectiveEnv.META_GRAPH_API_VERSION
   });
   const me = await client.get({ accessToken, requestId }, "/me", { fields: "id,name" }, z.object({ id: z.string(), name: z.string().optional() }).passthrough());
   const businesses = await client.get({ accessToken, requestId }, "/me/businesses", { fields: "id,name", limit: 50 }, businessesResponseSchema).catch(() => ({ data: [] }));
+  const businessIds = businesses.data.map((business) => business.id);
   const adAccounts = await client.getPaged({ accessToken, requestId }, "/me/adaccounts", {
     fields: "id,account_id,name,currency,timezone_name,account_status,disable_reason,business",
     limit: 50
@@ -71,28 +82,54 @@ export async function consumeMetaOAuthCallback(input: { env: ServerEnv; code: st
     business: z.object({ id: z.string().optional() }).passthrough().optional()
   }).passthrough());
 
-  const connection = await prisma.metaConnection.create({
-    data: {
-      mode: "LIVE",
-      status: "HEALTHY",
-      metaUserId: me.id,
-      metaBusinessIds: businesses.data.map((business) => business.id),
-      scopes: ["ads_read", "ads_management", "business_management", "pages_read_engagement", "instagram_basic"],
-      tokenCiphertext: encrypted.ciphertext,
-      tokenIv: encrypted.iv,
-      tokenAuthTag: encrypted.authTag,
-      tokenKeyVersion: encrypted.keyVersion,
-      tokenExpiresAt: expiresAt,
-      lastValidatedAt: new Date(),
-      organizationId: oauthState.organizationId
-    }
+  const existingConnection = await prisma.metaConnection.findFirst({
+    where: {
+      organizationId: oauthState.organizationId,
+      metaUserId: me.id
+    },
+    orderBy: { updatedAt: "desc" }
   });
+  const connectionData = {
+    mode: "LIVE" as const,
+    status: "HEALTHY" as const,
+    metaUserId: me.id,
+    metaBusinessIds: toPrismaJson(businessIds),
+    scopes: [...metaOAuthScopes],
+    tokenCiphertext: encrypted.ciphertext,
+    tokenIv: encrypted.iv,
+    tokenAuthTag: encrypted.authTag,
+    tokenKeyVersion: encrypted.keyVersion,
+    tokenExpiresAt: expiresAt,
+    lastValidatedAt: new Date(),
+    revokedAt: null,
+    lastErrorCode: null,
+    lastErrorSummary: null
+  };
+  const connection = existingConnection
+    ? await prisma.metaConnection.update({
+      where: { id: existingConnection.id },
+      data: connectionData
+    })
+    : await prisma.metaConnection.create({
+      data: {
+        ...connectionData,
+        organizationId: oauthState.organizationId
+      }
+    });
 
-  await prisma.encryptedToken.create({
-    data: {
+  await prisma.encryptedToken.upsert({
+    where: {
+      organizationId_connectionId_type_subjectMetaId: {
+        organizationId: oauthState.organizationId,
+        connectionId: connection.id,
+        type: "META_USER",
+        subjectMetaId: me.id
+      }
+    },
+    create: {
       type: "META_USER",
       subjectMetaId: me.id,
-      scopes: ["ads_read", "ads_management", "business_management", "pages_read_engagement", "instagram_basic"],
+      scopes: [...metaOAuthScopes],
       ciphertext: encrypted.ciphertext,
       iv: encrypted.iv,
       authTag: encrypted.authTag,
@@ -100,6 +137,15 @@ export async function consumeMetaOAuthCallback(input: { env: ServerEnv; code: st
       expiresAt,
       organizationId: oauthState.organizationId,
       connectionId: connection.id
+    },
+    update: {
+      scopes: [...metaOAuthScopes],
+      ciphertext: encrypted.ciphertext,
+      iv: encrypted.iv,
+      authTag: encrypted.authTag,
+      keyVersion: encrypted.keyVersion,
+      expiresAt,
+      revokedAt: null
     }
   });
 
@@ -138,7 +184,19 @@ export async function consumeMetaOAuthCallback(input: { env: ServerEnv; code: st
     });
   }
 
-  await prisma.oAuthState.update({ where: { id: oauthState.id }, data: { consumedAt: new Date() } });
+  if (adAccounts.length > 0) {
+    const firstAdAccount = adAccounts[0];
+    const selectedAccount = await prisma.adAccount.findFirst({
+      where: { organizationId: oauthState.organizationId, isSelected: true }
+    });
+    if (!selectedAccount && firstAdAccount) {
+      await prisma.adAccount.update({
+        where: { organizationId_metaId: { organizationId: oauthState.organizationId, metaId: firstAdAccount.id } },
+        data: { isSelected: true }
+      });
+    }
+  }
+
   await prisma.auditLog.create({
     data: {
       action: "meta.oauth.connected",
@@ -157,27 +215,34 @@ export async function consumeMetaOAuthCallback(input: { env: ServerEnv; code: st
 }
 
 async function exchangeCodeForToken(env: ServerEnv, code: string, requestId: string) {
-  const url = graphUrl(env, "/oauth/access_token");
-  url.searchParams.set("client_id", env.META_APP_ID);
-  url.searchParams.set("redirect_uri", env.META_OAUTH_REDIRECT_URI);
-  url.searchParams.set("client_secret", env.META_APP_SECRET);
-  url.searchParams.set("code", code);
-  return fetchToken(url, requestId);
+  return fetchToken(env, {
+    client_id: env.META_APP_ID,
+    redirect_uri: env.META_OAUTH_REDIRECT_URI,
+    client_secret: env.META_APP_SECRET,
+    code
+  }, requestId);
 }
 
 async function exchangeForLongLivedToken(env: ServerEnv, accessToken: string, requestId: string) {
-  const url = graphUrl(env, "/oauth/access_token");
-  url.searchParams.set("grant_type", "fb_exchange_token");
-  url.searchParams.set("client_id", env.META_APP_ID);
-  url.searchParams.set("client_secret", env.META_APP_SECRET);
-  url.searchParams.set("fb_exchange_token", accessToken);
-  return fetchToken(url, requestId);
+  return fetchToken(env, {
+    grant_type: "fb_exchange_token",
+    client_id: env.META_APP_ID,
+    client_secret: env.META_APP_SECRET,
+    fb_exchange_token: accessToken
+  }, requestId);
 }
 
-async function fetchToken(url: URL, requestId: string) {
-  const response = await fetch(url, { headers: { "x-adflow-request-id": requestId } });
+async function fetchToken(env: ServerEnv, params: Record<string, string>, requestId: string) {
+  const response = await fetch(graphUrl(env, "/oauth/access_token"), {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      "x-adflow-request-id": requestId
+    },
+    body: new URLSearchParams(params)
+  });
   const payload = (await response.json().catch(() => ({}))) as unknown;
-  if (!response.ok) throw new Error(safeErrorMessage(payload));
+  if (!response.ok) throw new Error(redactSensitiveText(`Meta token exchange failed (${response.status}): ${extractMetaErrorMessage(payload)}`));
   return tokenResponseSchema.parse(payload);
 }
 
@@ -187,6 +252,28 @@ function graphUrl(env: ServerEnv, path: string): URL {
 
 function hashState(state: string): string {
   return createHash("sha256").update(state).digest("hex");
+}
+
+function sanitizeReturnTo(returnTo: string | undefined): string {
+  if (!returnTo || !returnTo.startsWith("/") || returnTo.startsWith("//")) return "/settings/connections";
+  return returnTo;
+}
+
+function extractMetaErrorMessage(payload: unknown): string {
+  const parsed = z.object({
+    error: z.object({
+      message: z.string().optional(),
+      type: z.string().optional(),
+      code: z.union([z.string(), z.number()]).optional()
+    }).passthrough().optional()
+  }).passthrough().safeParse(payload);
+  if (!parsed.success || !parsed.data.error) return "request failed";
+  const details = [
+    parsed.data.error.message,
+    parsed.data.error.type,
+    parsed.data.error.code === undefined ? undefined : `code ${parsed.data.error.code}`
+  ].filter(Boolean);
+  return details.join(" / ") || "request failed";
 }
 
 function maskMetaId(value: string): string {

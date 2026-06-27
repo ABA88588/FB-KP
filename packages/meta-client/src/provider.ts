@@ -1,4 +1,5 @@
 import { evaluateMetaWriteGate, type OrganizationRole, type WriteGateInput, type WriteGateResult } from "@adflow/shared";
+import type { ParsedMetaCursorPage } from "./live/cursor";
 
 export type MetaProviderMode = "demo" | "live";
 export const DEFAULT_META_MUTATION_STATUS = "PAUSED";
@@ -112,6 +113,17 @@ export type LiveAsset = {
   raw: unknown;
 };
 
+export type MetaCursorPage<T> = {
+  data: T[];
+  cursor: ParsedMetaCursorPage;
+};
+
+export type MetaPageParams = {
+  after?: string;
+  limit?: number;
+  updatedSince?: string;
+};
+
 export type MetaCreateCampaignInput = {
   adAccountMetaId: string;
   name: string;
@@ -208,15 +220,25 @@ export function evaluateMetaMutationGuard(input: MetaMutationGuardInput, operati
 export interface LiveMetaAdsProviderContract extends MetaAdsProvider {
   readonly mode: "live";
   getMe(request: LiveMetaRequest): Promise<{ id: string; name?: string }>;
+  listAdAccountsPage(request: LiveMetaRequest, params?: MetaPageParams): Promise<MetaCursorPage<LiveAdAccount>>;
   listAdAccounts(request: LiveMetaRequest): Promise<LiveAdAccount[]>;
+  listCampaignsPage(request: LiveMetaRequest, adAccountMetaId: string, params?: MetaPageParams): Promise<MetaCursorPage<LiveCampaign>>;
   listCampaigns(request: LiveMetaRequest, adAccountMetaId: string): Promise<LiveCampaign[]>;
+  listAdSetsPage(request: LiveMetaRequest, adAccountMetaId: string, params?: MetaPageParams): Promise<MetaCursorPage<LiveAdSet>>;
   listAdSets(request: LiveMetaRequest, adAccountMetaId: string): Promise<LiveAdSet[]>;
+  listAdsPage(request: LiveMetaRequest, adAccountMetaId: string, params?: MetaPageParams): Promise<MetaCursorPage<LiveAd>>;
   listAds(request: LiveMetaRequest, adAccountMetaId: string): Promise<LiveAd[]>;
+  listCreativesPage(request: LiveMetaRequest, adAccountMetaId: string, params?: MetaPageParams): Promise<MetaCursorPage<LiveCreative>>;
   listCreatives(request: LiveMetaRequest, adAccountMetaId: string): Promise<LiveCreative[]>;
+  listInsightsPage(request: LiveMetaRequest, adAccountMetaId: string, params: { level: "account" | "campaign" | "adset" | "ad"; since: string; until: string; breakdowns?: readonly string[]; attributionWindows?: readonly string[]; after?: string; limit?: number }): Promise<MetaCursorPage<LiveInsight>>;
   listInsights(request: LiveMetaRequest, adAccountMetaId: string, params: { level: "account" | "campaign" | "adset" | "ad"; since: string; until: string; breakdowns?: readonly string[]; attributionWindows?: readonly string[] }): Promise<LiveInsight[]>;
+  listPagesPage(request: LiveMetaRequest, params?: MetaPageParams): Promise<MetaCursorPage<LiveAsset>>;
   listPages(request: LiveMetaRequest): Promise<LiveAsset[]>;
+  listInstagramAccountsPage(request: LiveMetaRequest, businessMetaId: string, params?: MetaPageParams): Promise<MetaCursorPage<LiveAsset>>;
   listInstagramAccounts(request: LiveMetaRequest, businessMetaId: string): Promise<LiveAsset[]>;
+  listPixelsPage(request: LiveMetaRequest, adAccountMetaId: string, params?: MetaPageParams): Promise<MetaCursorPage<LiveAsset>>;
   listPixels(request: LiveMetaRequest, adAccountMetaId: string): Promise<LiveAsset[]>;
+  listCustomAudiencesPage(request: LiveMetaRequest, adAccountMetaId: string, params?: MetaPageParams): Promise<MetaCursorPage<LiveAsset>>;
   listCustomAudiences(request: LiveMetaRequest, adAccountMetaId: string): Promise<LiveAsset[]>;
   createCampaign(request: LiveMetaRequest, input: MetaCreateCampaignInput): Promise<MetaMutationResult>;
   createAdSet(request: LiveMetaRequest, input: MetaCreateAdSetInput): Promise<MetaMutationResult>;

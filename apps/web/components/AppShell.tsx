@@ -4,6 +4,7 @@ import { ChevronDown, CircleHelp, FileBarChart, Grid3X3, Image, LayoutDashboard,
 import { useRouter } from "next/navigation";
 import { type ReactNode, useMemo, useState } from "react";
 import { cn } from "@adflow/shared";
+import { apiPath } from "@/lib/app-paths";
 import type { PageKey } from "@/lib/app-types";
 import { useDemoContext } from "@/lib/demo-context";
 import { DataSourceBanner, StatusDot } from "./ui";
@@ -80,7 +81,7 @@ export function AppShell({
   };
 
   const logout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
+    await fetch(apiPath("/api/auth/logout"), { method: "POST" });
     router.push("/login");
   };
 

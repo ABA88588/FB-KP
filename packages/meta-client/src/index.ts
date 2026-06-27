@@ -8,6 +8,6 @@ export { assertSupportedMetaGraphVersion, evaluateBreakdownCompatibility, isSupp
 export { DEFAULT_META_MUTATION_STATUS, buildMetaMutationGuardInput, evaluateMetaMutationGuard } from "./provider";
 export type { AdAccount, CampaignEntity, ConfiguredStatus, CreativeAsset, CreatedAdBundle, CreateAdDraftInput, DemoQueryContext, EffectiveStatus, EntityLevel, KpiMetric, ReportRow, SyncJob, UpdateEntityInput } from "./types";
 export type { BreakdownCompatibilityInput, BreakdownCompatibilityResult, MetaActionBreakdown, MetaBreakdown } from "./schemas/version-registry";
-export type { LiveAdAccount, LiveCampaign, LiveMetaAdsProviderContract, LiveMetaRequest, MetaAdsProvider, MetaCreateAdCreativeInput, MetaCreateAdInput, MetaCreateAdSetInput, MetaCreateCampaignInput, MetaMutationGuardInput, MetaMutationResult, MetaProviderAvailability, MetaProviderMode } from "./provider";
+export type { LiveAdAccount, LiveAd, LiveAdSet, LiveAsset, LiveCampaign, LiveCreative, LiveInsight, LiveMetaAdsProviderContract, LiveMetaRequest, MetaAdsProvider, MetaCreateAdCreativeInput, MetaCreateAdInput, MetaCreateAdSetInput, MetaCreateCampaignInput, MetaCursorPage, MetaMutationGuardInput, MetaMutationResult, MetaPageParams, MetaProviderAvailability, MetaProviderMode } from "./provider";
 export type { LiveMetaAdsProviderEnv } from "./live/live-provider";
 export type { MetaInternalErrorCode, NormalizedMetaError } from "./live/errors";

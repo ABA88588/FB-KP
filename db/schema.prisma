@@ -132,6 +132,7 @@ model User {
   reportPresets ReportPreset[]
   auditLogs     AuditLog[]    @relation("AuditActor")
   mutations     Operation[] @relation("MutationActor")
+  metaAppConfigsUpdated MetaAppConfig[] @relation("MetaAppConfigUpdatedBy")
 }
 
 model Session {
@@ -211,6 +212,7 @@ model Organization {
   exportFiles   ExportFile[]
   oauthStates   OAuthState[]
   apiRequestLogs ApiRequestLog[]
+  metaAppConfig MetaAppConfig?
 }
 
 model Membership {
@@ -243,6 +245,26 @@ model OAuthState {
 
   @@index([organizationId, userId])
   @@index([expiresAt])
+}
+
+model MetaAppConfig {
+  id                     String   @id @default(uuid()) @db.Uuid
+  metaAppId              String
+  encryptedMetaAppSecret Json?
+  graphApiVersion        String   @default("v25.0")
+  oauthRedirectUri       String
+  enableMetaWrites       Boolean  @default(false)
+  emergencyReadOnly      Boolean  @default(false)
+  allowedAdAccountIds    String[] @default([])
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  organizationId  String       @unique @db.Uuid
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  updatedByUserId String?      @db.Uuid
+  updatedByUser   User?        @relation("MetaAppConfigUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([updatedByUserId])
 }
 
 model MetaConnection {

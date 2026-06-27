@@ -3,11 +3,16 @@ import { z } from "zod";
 import { createRequestId, redactSensitiveText } from "@adflow/shared";
 import { MetaApiError, normalizeMetaError } from "./errors";
 import { pagedResponseSchema } from "./schemas";
-import { parseMetaCursorPage } from "./cursor";
+import { parseMetaCursorPage, type ParsedMetaCursorPage } from "./cursor";
 
 export type MetaHttpParam = string | number | boolean | readonly string[] | undefined;
 export type MetaHttpParams = Record<string, MetaHttpParam>;
 export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+
+export type MetaHttpPage<T> = {
+  data: T[];
+  cursor: ParsedMetaCursorPage;
+};
 
 export type MetaHttpClientConfig = {
   appSecret: string;
@@ -42,15 +47,22 @@ export class MetaHttpClient {
     return this.#request(request, "POST", path, {}, body, schema);
   }
 
+  async getPage<T>(request: MetaHttpRequest, path: string, params: MetaHttpParams, itemSchema: z.ZodType<T>): Promise<MetaHttpPage<T>> {
+    const response = await this.get(request, path, { ...params, limit: params.limit ?? 50 }, pagedResponseSchema(itemSchema));
+    return {
+      data: response.data,
+      cursor: parseMetaCursorPage(response.paging)
+    };
+  }
+
   async getPaged<T>(request: MetaHttpRequest, path: string, params: MetaHttpParams, itemSchema: z.ZodType<T>, maxPages = 50): Promise<T[]> {
     const rows: T[] = [];
     let after: string | undefined;
     for (let page = 0; page < maxPages; page += 1) {
-      const response = await this.get(request, path, { ...params, after, limit: params.limit ?? 50 }, pagedResponseSchema(itemSchema));
+      const response = await this.getPage(request, path, { ...params, after }, itemSchema);
       rows.push(...response.data);
-      const cursorPage = parseMetaCursorPage(response.paging);
-      after = cursorPage.nextAfter ?? cursorPage.after;
-      if (!after || !cursorPage.hasNextPage) break;
+      after = response.cursor.nextAfter ?? response.cursor.after;
+      if (!after || !response.cursor.hasNextPage) break;
     }
     return rows;
   }

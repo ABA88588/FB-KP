@@ -51,6 +51,7 @@ const optionalAes256GcmKey = optionalString
 export const serverEnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   APP_BASE_URL: urlEnv.default("http://localhost:3000"),
+  APP_BASE_PATH: stringEnv.default("/ads"),
   DATABASE_URL: stringEnv,
   REDIS_URL: stringEnv,
   AUTH_SECRET: stringEnv.refine((value) => value.length === 0 || value.length >= 32, {

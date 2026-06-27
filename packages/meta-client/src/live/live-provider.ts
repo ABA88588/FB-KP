@@ -14,8 +14,10 @@ import type {
   MetaCreateAdInput,
   MetaCreateAdSetInput,
   MetaCreateCampaignInput,
+  MetaCursorPage,
   MetaDuplicateObjectInput,
   MetaMutationResult,
+  MetaPageParams,
   MetaProviderAvailability,
   MetaUpdateObjectInput
 } from "../provider";
@@ -78,145 +80,204 @@ export class LiveMetaAdsProvider implements LiveMetaAdsProviderContract {
   }
 
   async listAdAccounts(request: LiveMetaRequest): Promise<LiveAdAccount[]> {
+    return collectPages((after) => this.listAdAccountsPage(request, cursorParams(after)));
+  }
+
+  async listAdAccountsPage(request: LiveMetaRequest, params: MetaPageParams = {}): Promise<MetaCursorPage<LiveAdAccount>> {
     const client = this.#requireClient();
-    const rows = await client.getPaged(this.#request(request), "/me/adaccounts", {
+    const page = await client.getPage(this.#request(request), "/me/adaccounts", {
       fields: metaFieldRegistry.adAccount,
-      limit: 50
+      ...pageParams(params)
     }, liveAdAccountSchema);
-    return rows.map((row) => {
-      const account: LiveAdAccount = {
-        metaId: row.id,
-        accountId: row.account_id ?? row.id.replace(/^act_/, ""),
-        name: row.name ?? row.id,
-        currency: row.currency ?? "USD",
-        timezoneName: row.timezone_name ?? "UTC",
-        status: String(row.account_status ?? "UNKNOWN"),
-        isReadOnly: row.account_status !== undefined && String(row.account_status) !== "1"
-      };
-      if (row.disable_reason !== undefined) account.disableReason = String(row.disable_reason);
-      return account;
-    });
+    return {
+      data: page.data.map((row) => {
+        const account: LiveAdAccount = {
+          metaId: row.id,
+          accountId: row.account_id ?? row.id.replace(/^act_/, ""),
+          name: row.name ?? row.id,
+          currency: row.currency ?? "USD",
+          timezoneName: row.timezone_name ?? "UTC",
+          status: String(row.account_status ?? "UNKNOWN"),
+          isReadOnly: row.account_status !== undefined && String(row.account_status) !== "1"
+        };
+        if (row.disable_reason !== undefined) account.disableReason = String(row.disable_reason);
+        return account;
+      }),
+      cursor: page.cursor
+    };
   }
 
   async listCampaigns(request: LiveMetaRequest, adAccountMetaId: string): Promise<LiveCampaign[]> {
+    return collectPages((after) => this.listCampaignsPage(request, adAccountMetaId, cursorParams(after)));
+  }
+
+  async listCampaignsPage(request: LiveMetaRequest, adAccountMetaId: string, params: MetaPageParams = {}): Promise<MetaCursorPage<LiveCampaign>> {
     const client = this.#requireClient();
-    const rows = await client.getPaged(this.#request(request), `${normalizeAdAccountPath(adAccountMetaId)}/campaigns`, {
+    const page = await client.getPage(this.#request(request), `${normalizeAdAccountPath(adAccountMetaId)}/campaigns`, {
       fields: metaFieldRegistry.campaign,
-      limit: 50
+      ...pageParams(params),
+      filtering: updatedSinceFiltering(params.updatedSince)
     }, liveCampaignSchema);
-    return rows.map((row) => {
-      const campaign: LiveCampaign = {
-        metaId: row.id,
-        name: row.name,
-        configuredStatus: row.configured_status ?? "UNKNOWN",
-        effectiveStatus: row.effective_status ?? "UNKNOWN"
-      };
-      if (row.objective !== undefined) campaign.objective = row.objective;
-      if (row.daily_budget !== undefined) campaign.dailyBudgetMinor = row.daily_budget;
-      if (row.updated_time !== undefined) campaign.updatedTime = row.updated_time;
-      return campaign;
-    });
+    return {
+      data: page.data.map((row) => {
+        const campaign: LiveCampaign = {
+          metaId: row.id,
+          name: row.name,
+          configuredStatus: row.configured_status ?? "UNKNOWN",
+          effectiveStatus: row.effective_status ?? "UNKNOWN"
+        };
+        if (row.objective !== undefined) campaign.objective = row.objective;
+        if (row.daily_budget !== undefined) campaign.dailyBudgetMinor = row.daily_budget;
+        if (row.updated_time !== undefined) campaign.updatedTime = row.updated_time;
+        return campaign;
+      }),
+      cursor: page.cursor
+    };
   }
 
   async listAdSets(request: LiveMetaRequest, adAccountMetaId: string): Promise<LiveAdSet[]> {
+    return collectPages((after) => this.listAdSetsPage(request, adAccountMetaId, cursorParams(after)));
+  }
+
+  async listAdSetsPage(request: LiveMetaRequest, adAccountMetaId: string, params: MetaPageParams = {}): Promise<MetaCursorPage<LiveAdSet>> {
     const client = this.#requireClient();
-    const rows = await client.getPaged(this.#request(request), `${normalizeAdAccountPath(adAccountMetaId)}/adsets`, {
+    const page = await client.getPage(this.#request(request), `${normalizeAdAccountPath(adAccountMetaId)}/adsets`, {
       fields: "id,campaign_id,name,configured_status,effective_status,daily_budget,lifetime_budget,optimization_goal,billing_event,targeting,promoted_object,updated_time",
-      limit: 50
+      ...pageParams(params),
+      filtering: updatedSinceFiltering(params.updatedSince)
     }, liveAdSetSchema);
-    return rows.map((row) => {
-      const adSet: LiveAdSet = {
-        metaId: row.id,
-        campaignMetaId: row.campaign_id,
-        name: row.name,
-        configuredStatus: row.configured_status ?? "UNKNOWN",
-        effectiveStatus: row.effective_status ?? "UNKNOWN"
-      };
-      if (row.daily_budget !== undefined) adSet.dailyBudgetMinor = row.daily_budget;
-      if (row.lifetime_budget !== undefined) adSet.lifetimeBudgetMinor = row.lifetime_budget;
-      if (row.optimization_goal !== undefined) adSet.optimizationGoal = row.optimization_goal;
-      if (row.billing_event !== undefined) adSet.billingEvent = row.billing_event;
-      if (row.targeting !== undefined) adSet.targetingJson = row.targeting;
-      if (row.promoted_object !== undefined) adSet.promotedObjectJson = row.promoted_object;
-      if (row.updated_time !== undefined) adSet.updatedTime = row.updated_time;
-      return adSet;
-    });
+    return {
+      data: page.data.map((row) => {
+        const adSet: LiveAdSet = {
+          metaId: row.id,
+          campaignMetaId: row.campaign_id,
+          name: row.name,
+          configuredStatus: row.configured_status ?? "UNKNOWN",
+          effectiveStatus: row.effective_status ?? "UNKNOWN"
+        };
+        if (row.daily_budget !== undefined) adSet.dailyBudgetMinor = row.daily_budget;
+        if (row.lifetime_budget !== undefined) adSet.lifetimeBudgetMinor = row.lifetime_budget;
+        if (row.optimization_goal !== undefined) adSet.optimizationGoal = row.optimization_goal;
+        if (row.billing_event !== undefined) adSet.billingEvent = row.billing_event;
+        if (row.targeting !== undefined) adSet.targetingJson = row.targeting;
+        if (row.promoted_object !== undefined) adSet.promotedObjectJson = row.promoted_object;
+        if (row.updated_time !== undefined) adSet.updatedTime = row.updated_time;
+        return adSet;
+      }),
+      cursor: page.cursor
+    };
   }
 
   async listAds(request: LiveMetaRequest, adAccountMetaId: string): Promise<LiveAd[]> {
+    return collectPages((after) => this.listAdsPage(request, adAccountMetaId, cursorParams(after)));
+  }
+
+  async listAdsPage(request: LiveMetaRequest, adAccountMetaId: string, params: MetaPageParams = {}): Promise<MetaCursorPage<LiveAd>> {
     const client = this.#requireClient();
-    const rows = await client.getPaged(this.#request(request), `${normalizeAdAccountPath(adAccountMetaId)}/ads`, {
+    const page = await client.getPage(this.#request(request), `${normalizeAdAccountPath(adAccountMetaId)}/ads`, {
       fields: "id,campaign_id,adset_id,creative{id},name,configured_status,effective_status,updated_time",
-      limit: 50
+      ...pageParams(params),
+      filtering: updatedSinceFiltering(params.updatedSince)
     }, liveAdSchema);
-    return rows.map((row) => {
-      const ad: LiveAd = {
-        metaId: row.id,
-        campaignMetaId: row.campaign_id,
-        adSetMetaId: row.adset_id,
-        name: row.name,
-        configuredStatus: row.configured_status ?? "UNKNOWN",
-        effectiveStatus: row.effective_status ?? "UNKNOWN"
-      };
-      if (row.creative?.id !== undefined) ad.creativeMetaId = row.creative.id;
-      if (row.updated_time !== undefined) ad.updatedTime = row.updated_time;
-      return ad;
-    });
+    return {
+      data: page.data.map((row) => {
+        const ad: LiveAd = {
+          metaId: row.id,
+          campaignMetaId: row.campaign_id,
+          adSetMetaId: row.adset_id,
+          name: row.name,
+          configuredStatus: row.configured_status ?? "UNKNOWN",
+          effectiveStatus: row.effective_status ?? "UNKNOWN"
+        };
+        if (row.creative?.id !== undefined) ad.creativeMetaId = row.creative.id;
+        if (row.updated_time !== undefined) ad.updatedTime = row.updated_time;
+        return ad;
+      }),
+      cursor: page.cursor
+    };
   }
 
   async listCreatives(request: LiveMetaRequest, adAccountMetaId: string): Promise<LiveCreative[]> {
+    return collectPages((after) => this.listCreativesPage(request, adAccountMetaId, cursorParams(after)));
+  }
+
+  async listCreativesPage(request: LiveMetaRequest, adAccountMetaId: string, params: MetaPageParams = {}): Promise<MetaCursorPage<LiveCreative>> {
     const client = this.#requireClient();
-    const rows = await client.getPaged(this.#request(request), `${normalizeAdAccountPath(adAccountMetaId)}/adcreatives`, {
+    const page = await client.getPage(this.#request(request), `${normalizeAdAccountPath(adAccountMetaId)}/adcreatives`, {
       fields: "id,name,title,body,image_hash,image_url,thumbnail_url,status,object_story_spec,asset_feed_spec",
-      limit: 50
+      ...pageParams(params)
     }, liveCreativeSchema);
-    return rows.map((row) => {
-      const creative: LiveCreative = { metaId: row.id, raw: row };
-      if (row.name !== undefined) creative.name = row.name;
-      if (row.title !== undefined) creative.title = row.title;
-      if (row.body !== undefined) creative.body = row.body;
-      if (row.image_hash !== undefined) creative.imageHash = row.image_hash;
-      if (row.image_url !== undefined) creative.imageUrl = row.image_url;
-      if (row.thumbnail_url !== undefined) creative.thumbnailUrl = row.thumbnail_url;
-      if (row.status !== undefined) creative.status = row.status;
-      return creative;
-    });
+    return {
+      data: page.data.map((row) => {
+        const creative: LiveCreative = { metaId: row.id, raw: row };
+        if (row.name !== undefined) creative.name = row.name;
+        if (row.title !== undefined) creative.title = row.title;
+        if (row.body !== undefined) creative.body = row.body;
+        if (row.image_hash !== undefined) creative.imageHash = row.image_hash;
+        if (row.image_url !== undefined) creative.imageUrl = row.image_url;
+        if (row.thumbnail_url !== undefined) creative.thumbnailUrl = row.thumbnail_url;
+        if (row.status !== undefined) creative.status = row.status;
+        return creative;
+      }),
+      cursor: page.cursor
+    };
   }
 
   async listInsights(request: LiveMetaRequest, adAccountMetaId: string, params: { level: "account" | "campaign" | "adset" | "ad"; since: string; until: string; breakdowns?: readonly string[]; attributionWindows?: readonly string[] }): Promise<LiveInsight[]> {
+    return collectPages((after) => this.listInsightsPage(request, adAccountMetaId, { ...params, ...cursorParams(after) }));
+  }
+
+  async listInsightsPage(request: LiveMetaRequest, adAccountMetaId: string, params: { level: "account" | "campaign" | "adset" | "ad"; since: string; until: string; breakdowns?: readonly string[]; attributionWindows?: readonly string[]; after?: string; limit?: number }): Promise<MetaCursorPage<LiveInsight>> {
     const client = this.#requireClient();
-    return client.getPaged(this.#request(request), `${normalizeAdAccountPath(adAccountMetaId)}/insights`, {
+    return client.getPage(this.#request(request), `${normalizeAdAccountPath(adAccountMetaId)}/insights`, {
       fields: "account_id,campaign_id,adset_id,ad_id,date_start,date_stop,spend,impressions,reach,clicks,actions,action_values,ctr,cpc,cpm",
       level: params.level,
       time_range: JSON.stringify({ since: params.since, until: params.until }),
       breakdowns: params.breakdowns?.join(","),
       action_attribution_windows: params.attributionWindows?.join(","),
-      limit: 50
+      after: params.after,
+      limit: params.limit ?? 50
     }, liveInsightSchema);
   }
 
   async listPages(request: LiveMetaRequest): Promise<LiveAsset[]> {
+    return collectPages((after) => this.listPagesPage(request, cursorParams(after)));
+  }
+
+  async listPagesPage(request: LiveMetaRequest, params: MetaPageParams = {}): Promise<MetaCursorPage<LiveAsset>> {
     const client = this.#requireClient();
-    const rows = await client.getPaged(this.#request(request), "/me/accounts", { fields: "id,name,category,tasks", limit: 50 }, liveAssetSchema);
-    return rows.map(assetFromRow);
+    const page = await client.getPage(this.#request(request), "/me/accounts", { fields: "id,name,category,tasks", ...pageParams(params) }, liveAssetSchema);
+    return { data: page.data.map(assetFromRow), cursor: page.cursor };
   }
 
   async listInstagramAccounts(request: LiveMetaRequest, businessMetaId: string): Promise<LiveAsset[]> {
+    return collectPages((after) => this.listInstagramAccountsPage(request, businessMetaId, cursorParams(after)));
+  }
+
+  async listInstagramAccountsPage(request: LiveMetaRequest, businessMetaId: string, params: MetaPageParams = {}): Promise<MetaCursorPage<LiveAsset>> {
     const client = this.#requireClient();
-    const rows = await client.getPaged(this.#request(request), `/${businessMetaId}/instagram_accounts`, { fields: "id,username,name", limit: 50 }, liveAssetSchema);
-    return rows.map(assetFromRow);
+    const page = await client.getPage(this.#request(request), `/${businessMetaId}/instagram_accounts`, { fields: "id,username,name", ...pageParams(params) }, liveAssetSchema);
+    return { data: page.data.map(assetFromRow), cursor: page.cursor };
   }
 
   async listPixels(request: LiveMetaRequest, adAccountMetaId: string): Promise<LiveAsset[]> {
+    return collectPages((after) => this.listPixelsPage(request, adAccountMetaId, cursorParams(after)));
+  }
+
+  async listPixelsPage(request: LiveMetaRequest, adAccountMetaId: string, params: MetaPageParams = {}): Promise<MetaCursorPage<LiveAsset>> {
     const client = this.#requireClient();
-    const rows = await client.getPaged(this.#request(request), `${normalizeAdAccountPath(adAccountMetaId)}/adspixels`, { fields: "id,name,code", limit: 50 }, liveAssetSchema);
-    return rows.map(assetFromRow);
+    const page = await client.getPage(this.#request(request), `${normalizeAdAccountPath(adAccountMetaId)}/adspixels`, { fields: "id,name,code", ...pageParams(params) }, liveAssetSchema);
+    return { data: page.data.map(assetFromRow), cursor: page.cursor };
   }
 
   async listCustomAudiences(request: LiveMetaRequest, adAccountMetaId: string): Promise<LiveAsset[]> {
+    return collectPages((after) => this.listCustomAudiencesPage(request, adAccountMetaId, cursorParams(after)));
+  }
+
+  async listCustomAudiencesPage(request: LiveMetaRequest, adAccountMetaId: string, params: MetaPageParams = {}): Promise<MetaCursorPage<LiveAsset>> {
     const client = this.#requireClient();
-    const rows = await client.getPaged(this.#request(request), `${normalizeAdAccountPath(adAccountMetaId)}/customaudiences`, { fields: "id,name,subtype,approximate_count,delivery_status,operation_status", limit: 50 }, liveAssetSchema);
-    return rows.map(assetFromRow);
+    const page = await client.getPage(this.#request(request), `${normalizeAdAccountPath(adAccountMetaId)}/customaudiences`, { fields: "id,name,subtype,approximate_count,delivery_status,operation_status", ...pageParams(params) }, liveAssetSchema);
+    return { data: page.data.map(assetFromRow), cursor: page.cursor };
   }
 
   async createCampaign(request: LiveMetaRequest, input: MetaCreateCampaignInput): Promise<MetaMutationResult> {
@@ -324,6 +385,36 @@ export function createLiveMetaAdsProviderFromEnv(env: LiveMetaAdsProviderEnv, op
 
 function normalizeAdAccountPath(adAccountMetaId: string): string {
   return adAccountMetaId.startsWith("/act_") ? adAccountMetaId : `/${adAccountMetaId.startsWith("act_") ? adAccountMetaId : `act_${adAccountMetaId}`}`;
+}
+
+async function collectPages<T>(loadPage: (after?: string) => Promise<MetaCursorPage<T>>, maxPages = 50): Promise<T[]> {
+  const rows: T[] = [];
+  let after: string | undefined;
+  for (let pageNumber = 0; pageNumber < maxPages; pageNumber += 1) {
+    const page = await loadPage(after);
+    rows.push(...page.data);
+    after = page.cursor.nextAfter ?? page.cursor.after;
+    if (!after || !page.cursor.hasNextPage) break;
+  }
+  return rows;
+}
+
+function pageParams(params: MetaPageParams): { after?: string; limit: number } {
+  return {
+    ...(params.after !== undefined ? { after: params.after } : {}),
+    limit: params.limit ?? 50
+  };
+}
+
+function cursorParams(after: string | undefined): MetaPageParams {
+  return after === undefined ? {} : { after };
+}
+
+function updatedSinceFiltering(updatedSince: string | undefined): string | undefined {
+  if (updatedSince === undefined) return undefined;
+  const date = new Date(updatedSince);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return JSON.stringify([{ field: "updated_time", operator: "GREATER_THAN", value: Math.floor(date.getTime() / 1000) }]);
 }
 
 function assertWriteGate(guard: MetaCreateCampaignInput["guard"], operationId: string): void {

@@ -315,6 +315,7 @@ function coerceServerEnv(input: EnvInput): ServerEnv {
   return {
     NODE_ENV: coerceNodeEnv(normalized.NODE_ENV),
     APP_BASE_URL: coerceString(normalized.APP_BASE_URL) ?? "http://localhost:3000",
+    APP_BASE_PATH: coerceString(normalized.APP_BASE_PATH) ?? "/ads",
     DATABASE_URL: coerceString(normalized.DATABASE_URL) ?? "",
     REDIS_URL: coerceString(normalized.REDIS_URL) ?? "",
     AUTH_SECRET: coerceString(normalized.AUTH_SECRET) ?? "",

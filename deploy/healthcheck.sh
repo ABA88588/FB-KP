@@ -47,7 +47,7 @@ compose exec -T redis sh -ec 'redis-cli -a "$REDIS_PASSWORD" --no-auth-warning p
   || fail "redis not ready"
 
 health_url="${HEALTHCHECK_URL:-$(read_env_key HEALTHCHECK_URL)}"
-health_url="${health_url:-http://127.0.0.1/}"
+health_url="${health_url:-http://127.0.0.1/ads/api/health/live}"
 http_get "$health_url" \
   && ok "reverse proxy HTTP health check succeeded" \
   || fail "reverse proxy HTTP health check failed"

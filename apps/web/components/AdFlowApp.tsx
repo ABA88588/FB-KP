@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { DataState } from "@adflow/shared";
 import type { PageKey } from "@/lib/app-types";
+import { appBasePath } from "@/lib/app-paths";
 import { AppShell } from "./AppShell";
 import { AppRuntimeProvider } from "@/lib/app-runtime";
 import { DemoProvider } from "@/lib/demo-context";
@@ -26,8 +27,9 @@ const validStates: DataState[] = [
 
 export function AdFlowApp({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const page = pageFromPath(pathname);
-  const standalone = isStandalonePath(pathname);
+  const normalizedPathname = stripBasePath(pathname);
+  const page = pageFromPath(normalizedPathname);
+  const standalone = isStandalonePath(normalizedPathname);
   const [toast, setToast] = useState<{ text: string; kind: "info" | "success" | "warning" | "danger" } | null>(null);
   const [dataState, setDataState] = useState<DataState>("success");
 
@@ -79,4 +81,11 @@ function pageFromPath(pathname: string): PageKey {
   if (pathname.startsWith("/sync-center")) return "sync-center";
   if (pathname.startsWith("/settings")) return "settings";
   return "overview";
+}
+
+function stripBasePath(pathname: string): string {
+  if (!appBasePath) return pathname;
+  if (pathname === appBasePath) return "/";
+  if (pathname.startsWith(`${appBasePath}/`)) return pathname.slice(appBasePath.length) || "/";
+  return pathname;
 }

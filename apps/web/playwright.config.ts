@@ -20,7 +20,7 @@ export default defineConfig({
   },
   webServer: {
     command: "pnpm.cmd dev",
-    url: "http://127.0.0.1:3007/overview",
+    url: "http://127.0.0.1:3007/ads/overview",
     reuseExistingServer: true,
     timeout: 120_000
   },

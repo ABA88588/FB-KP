@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createRequestId, safeErrorMessage } from "@adflow/shared";
+import { createRequestId } from "@adflow/shared";
 import { loadServerEnv } from "@/lib/server-env";
 import { consumeMetaOAuthCallback } from "@/lib/meta-oauth-service";
 
@@ -16,35 +16,36 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const error = url.searchParams.get("error");
   if (error) {
-    return redirectToOnboarding(loaded.env.APP_BASE_URL, "oauth_denied");
+    return redirectToConnections(request, { status: "denied" });
   }
 
   const state = url.searchParams.get("state");
   const code = url.searchParams.get("code");
   if (!code) {
-    return NextResponse.json({ ok: false, status: "missing_oauth_code" }, { status: 400 });
+    return redirectToConnections(request, { status: "failed", requestId });
   }
   if (!state) {
-    return NextResponse.json({ ok: false, status: "missing_oauth_state" }, { status: 400 });
+    return redirectToConnections(request, { status: "failed", requestId });
   }
 
   try {
-    const result = await consumeMetaOAuthCallback({ env: loaded.env, code, state, requestId });
-    const nextUrl = new URL(result.returnTo || "/onboarding/meta", loaded.env.APP_BASE_URL);
-    nextUrl.searchParams.set("status", "oauth_connected");
-    nextUrl.searchParams.set("accounts", String(result.adAccountCount));
-    return NextResponse.redirect(nextUrl);
-  } catch (cause) {
-    const nextUrl = new URL("/onboarding/meta", loaded.env.APP_BASE_URL);
-    nextUrl.searchParams.set("status", "oauth_failed");
-    nextUrl.searchParams.set("requestId", requestId);
-    nextUrl.searchParams.set("message", safeErrorMessage(cause));
-    return NextResponse.redirect(nextUrl);
+    await consumeMetaOAuthCallback({ env: loaded.env, code, state, requestId });
+    return redirectToConnections(request, { status: "connected" });
+  } catch {
+    return redirectToConnections(request, { status: "failed", requestId });
   }
 }
 
-function redirectToOnboarding(baseUrl: string, status: string): NextResponse {
-  const nextUrl = new URL("/onboarding/meta", baseUrl);
-  nextUrl.searchParams.set("status", status);
+function redirectToConnections(request: NextRequest, params: Record<string, string>): NextResponse {
+  const nextUrl = new URL(request.url);
+  nextUrl.pathname = `${extractBasePath(nextUrl.pathname, "/api/meta/oauth/callback")}/settings/connections`;
+  nextUrl.search = "";
+  for (const [key, value] of Object.entries(params)) {
+    nextUrl.searchParams.set(key, value);
+  }
   return NextResponse.redirect(nextUrl);
+}
+
+function extractBasePath(pathname: string, routePath: string): string {
+  return pathname.endsWith(routePath) ? pathname.slice(0, -routePath.length) : "";
 }

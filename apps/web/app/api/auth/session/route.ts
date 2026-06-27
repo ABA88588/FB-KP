@@ -68,7 +68,8 @@ function unauthenticated(requestId: string, clearCookie = false): Response {
     }
   );
   if (clearCookie) {
-    response.headers.append("Set-Cookie", `${sessionCookieName}=; Max-Age=${expiredSessionCookieOptions().maxAge}; Path=/; HttpOnly; SameSite=Lax`);
+    const options = expiredSessionCookieOptions();
+    response.headers.append("Set-Cookie", `${sessionCookieName}=; Max-Age=${options.maxAge}; Path=${options.path}; HttpOnly; SameSite=Lax`);
   }
   return response;
 }

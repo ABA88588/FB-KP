@@ -26,6 +26,36 @@ describe("MetaHttpClient", () => {
     await expect(client.get({ accessToken: "token_123" }, "/me", {}, z.object({ ok: z.boolean() }))).resolves.toEqual({ ok: true });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
+
+  it("returns a single cursor page without following next links", async () => {
+    const fetchImpl = vi.fn((input: string | URL | Request) => {
+      const url = toRequestUrl(input);
+      expect(url.searchParams.get("after")).toBe("after_1");
+      return Promise.resolve(new Response(JSON.stringify({
+        data: [{ id: "cmp_1" }],
+        paging: {
+          cursors: { after: "after_2" },
+          next: "https://graph.example.test/v25.0/act_1/campaigns?after=after_2"
+        }
+      }), { status: 200 }));
+    });
+    const client = new MetaHttpClient({
+      appSecret: "secret_123",
+      graphApiVersion: "v25.0",
+      graphBaseUrl: "https://graph.example.test",
+      fetchImpl
+    });
+
+    await expect(client.getPage({ accessToken: "token_123" }, "/act_1/campaigns", { after: "after_1" }, z.object({ id: z.string() }))).resolves.toEqual({
+      data: [{ id: "cmp_1" }],
+      cursor: {
+        after: "after_2",
+        hasNextPage: true,
+        nextAfter: "after_2"
+      }
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
 });
 
 function toRequestUrl(input: string | URL | Request): URL {
@@ -115,6 +145,33 @@ describe("LiveMetaAdsProvider", () => {
       operationId: "op_allowed",
       guard
     })).resolves.toEqual({ metaId: "cmp_1", operationId: "op_allowed", status: DEFAULT_META_MUTATION_STATUS });
+  });
+
+  it("exposes cursor-page reads for worker checkpointing", async () => {
+    const fetchImpl = vi.fn((input: string | URL | Request) => {
+      const url = toRequestUrl(input);
+      expect(url.pathname).toBe("/v25.0/act_1/campaigns");
+      expect(url.searchParams.get("after")).toBe("after_1");
+      expect(url.searchParams.get("filtering")).toContain("updated_time");
+      return Promise.resolve(new Response(JSON.stringify({
+        data: [{ id: "cmp_1", name: "Campaign 1", configured_status: "PAUSED", effective_status: "PAUSED" }],
+        paging: { cursors: { after: "after_2" } }
+      }), { status: 200 }));
+    });
+    const provider = new LiveMetaAdsProvider({
+      appId: "app_123",
+      appSecret: "secret_123",
+      accessToken: "token_123",
+      graphApiVersion: "v25.0",
+      graphBaseUrl: "https://graph.example.test",
+      fetchImpl
+    });
+
+    await expect(provider.listCampaignsPage({}, "act_1", { after: "after_1", updatedSince: "2026-06-01T00:00:00.000Z" })).resolves.toMatchObject({
+      data: [{ metaId: "cmp_1", name: "Campaign 1" }],
+      cursor: { after: "after_2", hasNextPage: false }
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });
 

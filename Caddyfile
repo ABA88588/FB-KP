@@ -8,8 +8,32 @@
 		-Server
 	}
 
+	@root path /
+	redir @root /ads/login 302
+
+	@legacyLogin path /login
+	redir @legacyLogin /ads/login 302
+
+	@legacyOverview path /overview
+	redir @legacyOverview /ads/overview 302
+
+	@legacyCampaigns path /campaigns /campaigns/*
+	redir @legacyCampaigns /ads{uri} 302
+
+	@legacyReports path /reports
+	redir @legacyReports /ads/reports 302
+
+	@legacySync path /sync-center
+	redir @legacySync /ads/sync-center 302
+
+	@legacyCreatives path /creatives
+	redir @legacyCreatives /ads/creatives 302
+
+	@legacySettings path /settings /settings/*
+	redir @legacySettings /ads{uri} 302
+
 	reverse_proxy web:3000 {
-		health_uri /api/health/live
+		health_uri /ads/api/health/live
 		health_interval 30s
 		health_timeout 5s
 	}

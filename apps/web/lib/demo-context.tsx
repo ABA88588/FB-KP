@@ -11,6 +11,7 @@ import {
   type ClientDataMode,
   type LiveSnapshot
 } from "@/lib/client-api-adapter";
+import { apiPath } from "@/lib/app-paths";
 
 export const dateRanges = ["近 7 天", "近 14 天", "近 30 天"] as const;
 export const compareRanges = ["上一周期", "去年同期", "不对比"] as const;
@@ -108,7 +109,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (mode !== "live") return;
     let cancelled = false;
-    fetch("/api/live/bootstrap", { cache: "no-store" })
+    fetch(apiPath("/api/live/bootstrap"), { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : null))
       .then((payload: { data?: LiveSnapshot } | null) => {
         if (!cancelled && payload?.data) {

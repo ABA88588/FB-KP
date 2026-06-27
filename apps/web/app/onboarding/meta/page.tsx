@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { apiPath } from "@/lib/app-paths";
 
 export default function MetaOnboardingPage({ searchParams }: { searchParams?: { status?: string } }) {
   const status = searchParams?.status ?? "not_started";
@@ -7,7 +8,7 @@ export default function MetaOnboardingPage({ searchParams }: { searchParams?: { 
       <span className="status-dot warning" aria-hidden="true" />
       <strong>Meta 连接需要生产凭证</strong>
       <span>{copyForStatus(status)}</span>
-      <a className="button primary" href="/api/meta/oauth/start">开始 Meta OAuth</a>
+      <a className="button primary" href={apiPath("/api/meta/oauth/start")}>开始 Meta OAuth</a>
       <Link className="button secondary" href="/overview">返回总览</Link>
     </section>
   );
