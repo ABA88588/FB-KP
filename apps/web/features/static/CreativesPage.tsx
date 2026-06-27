@@ -25,6 +25,7 @@ export function CreativesPage({ showToast: providedShowToast }: { showToast?: (t
       .listCreatives(account.id, query, type)
       .sort((a, b) => recentFirst ? a.recent - b.recent : b.usage - a.usage)
   ), [account.id, api, query, recentFirst, revision, type]);
+  const hasLiveAssets = !(connection.mode === "live" && visibleAssets.length === 0);
 
   const cycleType = () => {
     setType((current) => current === "全部" ? "图片" : current === "图片" ? "视频" : "全部");
@@ -75,12 +76,21 @@ export function CreativesPage({ showToast: providedShowToast }: { showToast?: (t
       <PageHeader
         eyebrow={accountLabel}
         title="素材中心"
-        description="图片、视频和已创建 Creative"
+        description={connection.mode === "live" && !hasLiveAssets ? "等待同步真实 Meta Creative、图片、视频和使用情况" : "图片、视频和已创建 Creative"}
         actions={<Button disabled={!connection.canWrite} variant="primary" onClick={uploadDemoAsset}><Upload size={14} /> 上传素材</Button>}
       />
       <DataSourceGate connection={connection}>
-      {connection.mode === "live" && visibleAssets.length === 0 ? (
-        <LiveEmptyState title="Live creative data is not available" detail="The Live client adapter returned no creative rows, so Demo creative fixtures are hidden." />
+      {!hasLiveAssets ? (
+        <LiveEmptyState
+          title="暂无真实素材"
+          detail="同步后将展示 Meta Creative、图片、视频和使用情况。未连接或写入关闭时，上传素材不可用。"
+          actions={
+            <>
+              <Button variant="primary" disabled={!connection.canRead} onClick={() => showToast(connection.canRead ? "已提交同步素材任务。" : connection.stateDetail, connection.canRead ? "success" : "warning")}>同步素材</Button>
+              <Button disabled={!connection.canWrite} onClick={uploadDemoAsset}>上传素材</Button>
+            </>
+          }
+        />
       ) : (
       <section className="panel creative-panel">
         <div className="table-toolbar">

@@ -9,6 +9,7 @@ import type { ToastKind } from "@/lib/app-types";
 import { useDemoContext } from "@/lib/demo-context";
 import { useAppRuntime } from "@/lib/app-runtime";
 import { Button, DataSourceGate, LiveEmptyState, PageHeader, StateGate, StatusDot } from "@/components/ui";
+import { apiPath } from "@/lib/app-paths";
 
 const tabs = ["同步任务", "API 错误", "数据新鲜度", "审计日志"] as const;
 
@@ -38,6 +39,7 @@ export function SyncCenterPage({
     queued: jobs.filter((job) => job.status === "queued").length,
     failed: jobs.filter((job) => job.status === "failed" || Boolean(job.error)).length
   };
+  const hasLiveJobs = !(connection.mode === "live" && jobs.length === 0);
   void version;
 
   const enqueueSync = () => {
@@ -45,14 +47,19 @@ export function SyncCenterPage({
       showToast(connection.stateDetail, "warning");
       return;
     }
+    if (connection.mode === "live") {
+      void fetch(apiPath(`/api/ad-accounts/${encodeURIComponent(account.id)}/sync`), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ type: "sync-entities" })
+      });
+      showToast("已提交真实同步任务，Worker 任务写入数据库后会显示进度。", "success");
+      return;
+    }
     const job = api.enqueueSyncJob(account.id);
     setTab("同步任务");
     setSelectedJobId(job.id);
     setVersion((current) => current + 1);
-    if (connection.mode === "live") {
-      showToast("Live sync adapter skeleton is selected; no Demo sync data was loaded.", "warning");
-      return;
-    }
     showToast("已新增立即同步任务，进度将在列表中更新", "success");
     [
       { delay: 500, progress: "34%", elapsed: "3s" },
@@ -70,7 +77,7 @@ export function SyncCenterPage({
   const checkConnection = () => {
     const checked = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
     setCheckedAt(checked);
-    showToast(connection.mode === "demo" ? "连接检查已完成：Demo Provider 正常" : connection.stateDetail, connection.canRead ? "success" : "warning");
+    showToast(connection.mode === "demo" ? "连接检查已完成：演示数据源正常" : connection.stateDetail, connection.canRead ? "success" : "warning");
   };
 
   return (
@@ -78,8 +85,8 @@ export function SyncCenterPage({
       <DataSourceGate connection={connection}>
       <PageHeader
         eyebrow="系统状态"
-        title="同步与错误"
-        description={`${accountLabel} · ${dateLabel} · 最近检查 ${checkedAt}`}
+        title="同步中心"
+        description={connection.mode === "live" && !hasLiveJobs ? "等待 Meta 连接和真实 Worker 同步任务" : `${accountLabel} · ${dateLabel} · 最近检查 ${checkedAt}`}
         actions={
           <>
             <Button onClick={checkConnection}>重新检查连接</Button>
@@ -88,8 +95,12 @@ export function SyncCenterPage({
         }
       />
 
-      {connection.mode === "live" && jobs.length === 0 ? (
-        <LiveEmptyState title="Live sync data is not available" detail="The Live client adapter returned no sync jobs, so Demo sync fixtures are hidden." />
+      {!hasLiveJobs ? (
+        <LiveEmptyState
+          title="暂无同步任务"
+          detail="连接 Meta 后，这里会显示同步进度、API 错误、fbtrace_id 和审计日志。生产 Live 模式不会显示演示失败任务。"
+          actions={<Button variant="primary" onClick={() => window.location.assign("/ads/settings/connections")}>连接 Meta 账号</Button>}
+        />
       ) : (
         <>
       <div className="entity-tabs">

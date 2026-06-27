@@ -48,6 +48,7 @@ export function CampaignManager({
   const showToast = providedShowToast ?? runtime.showToast;
   const router = useRouter();
   const { api, connection, account, accountLabel, queryContext, revision, touchDemoData } = useDemoContext();
+  const routePrefix = connection.mode === "demo" ? "/demo" : "";
   const [level, setLevel] = useState<EntityLevel>("campaign");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "paused">("active");
@@ -123,6 +124,7 @@ export function CampaignManager({
     adset: api.listEntities("adset", account.id, "", queryContext).length,
     ad: api.listEntities("ad", account.id, "", queryContext).length
   }), [account.id, api, dataVersion, queryContext, revision]);
+  const hasLiveObjects = !(connection.mode === "live" && levelCounts.campaign + levelCounts.adset + levelCounts.ad === 0);
 
   useEffect(() => {
     if (pageIndex > totalPages) setPageIndex(totalPages);
@@ -138,7 +140,7 @@ export function CampaignManager({
     setLevel(next);
     setSelectedIds(new Set());
     setPageIndex(1);
-    router.replace(`/campaigns?level=${next}`);
+    router.replace(`${routePrefix}/campaigns?level=${next}`);
   };
 
   const toggleSelected = (id: string, selected: boolean) => {
@@ -275,7 +277,7 @@ export function CampaignManager({
     setVisibleColumns(savedView.visibleColumns);
     setViewSavedAt(savedView.savedAt);
     setPageIndex(1);
-    router.replace(`/campaigns?level=${savedView.level}`);
+    router.replace(`${routePrefix}/campaigns?level=${savedView.level}`);
     setTopMoreOpen(false);
     showToast("已恢复保存的演示视图", "success");
   };
@@ -295,7 +297,7 @@ export function CampaignManager({
         levelLabel(level),
         row.id,
         row.name,
-        row.status === "active" ? "ACTIVE" : "PAUSED",
+        row.status === "active" ? "投放中" : "已暂停",
         row.effective,
         ...visibleColumns.map((column) => row[column])
       ])
@@ -334,17 +336,26 @@ export function CampaignManager({
         className="campaign-header"
         eyebrow={accountLabel}
         title="广告管理"
-        description="对象更新于 8 分钟前 · Insights 更新于 6 分钟前"
+        description={connection.mode === "live" && !hasLiveObjects ? "等待连接 Meta 广告账户并同步广告对象" : "对象更新于 8 分钟前 · Insights 更新于 6 分钟前"}
         actions={
           <>
-            <Button disabled={!connection.canWrite} onClick={() => router.push("/campaigns/new?step=1&source=import")}>导入草稿</Button>
-            <Button disabled={!connection.canWrite} variant="primary" onClick={() => router.push("/campaigns/new?step=1")}><Plus size={14} /> 新建广告</Button>
+            <Button disabled={!connection.canWrite} onClick={() => router.push(`${routePrefix}/campaigns/new?step=1&source=import`)}>导入草稿</Button>
+            <Button disabled={!connection.canWrite} variant="primary" onClick={() => router.push(`${routePrefix}/campaigns/new?step=1`)}><Plus size={14} /> 新建广告</Button>
           </>
         }
       />
 
-      {connection.mode === "live" && rows.length === 0 ? (
-        <LiveEmptyState title="Live campaign data is not available" detail="The Live client adapter returned no campaign rows, so Demo campaign fixtures are hidden." />
+      {!hasLiveObjects ? (
+        <LiveEmptyState
+          title="暂无真实广告对象"
+          detail="连接 Meta 广告账户后，可同步广告系列、广告组和广告。生产 Live 模式不会显示演示广告。"
+          actions={
+            <>
+              <Button variant="primary" disabled={!connection.canRead} onClick={() => showToast(connection.canRead ? "已提交同步广告对象任务。" : connection.stateDetail, connection.canRead ? "success" : "warning")}>立即同步广告对象</Button>
+              <Button variant="ghost" onClick={() => router.push("/demo/campaigns?level=campaign")}>查看演示沙箱</Button>
+            </>
+          }
+        />
       ) : (
         <>
       <div className="entity-tabs" role="tablist">
@@ -669,7 +680,7 @@ function roasClass(value: string): string {
 }
 
 function levelLabel(level: EntityLevel): string {
-  if (level === "campaign") return "Campaign";
-  if (level === "adset") return "Ad Set";
-  return "Ad";
+  if (level === "campaign") return "广告系列";
+  if (level === "adset") return "广告组";
+  return "广告";
 }

@@ -57,6 +57,12 @@ export function MetaAppSettingsPage() {
   };
 
   useEffect(() => {
+    if (!oauthRedirectUri && typeof window !== "undefined") {
+      setOauthRedirectUri(`${window.location.origin}${appPath("/api/meta/oauth/callback")}`);
+    }
+  }, [oauthRedirectUri]);
+
+  useEffect(() => {
     void load();
   }, []);
 
@@ -129,6 +135,8 @@ export function MetaAppSettingsPage() {
           <a className="active" href={appPath("/settings/meta-app")}>Meta App</a>
           <a href={appPath("/settings/write-controls")}>写入控制</a>
           <a href={appPath("/settings/members")}>成员与角色</a>
+          <a href={appPath("/sync-center")}>审计日志</a>
+          <a href={appPath("/demo/overview")}>演示沙箱</a>
         </aside>
         <section className="settings-content">
           <article className="panel connection-detail">
@@ -169,7 +177,7 @@ export function MetaAppSettingsPage() {
             <label>
               <span>OAuth Redirect URI</span>
               <div className="inline-input-action">
-                <input value={oauthRedirectUri} onChange={(event) => setOauthRedirectUri(event.target.value)} required />
+                <input aria-label="OAuth Redirect URI" value={oauthRedirectUri} onChange={(event) => setOauthRedirectUri(event.target.value)} required />
                 <Button size="compact" onClick={() => void copyRedirectUri()} aria-label="复制 OAuth Redirect URI"><Copy size={14} /></Button>
               </div>
             </label>

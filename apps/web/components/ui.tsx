@@ -41,9 +41,9 @@ export function StatusBadge({ status }: { status: string }) {
 export function DemoModeBanner() {
   return (
     <div className="demo-banner">
-      <span className="demo-badge">演示数据</span>
-      当前页面使用确定性模拟数据，不会向 Meta 创建或修改任何对象。
-      <a href={appPath("/settings/connections")}>查看连接</a>
+      <span className="demo-badge">演示沙箱</span>
+      所有数据均为模拟，不会连接 Meta，也不会写入真实广告对象。
+      <a href={appPath("/overview")}>返回实时模式</a>
     </div>
   );
 }
@@ -55,13 +55,14 @@ export function DataSourceBanner({ connection }: { connection: ClientApiConnecti
     <div className={cn("demo-banner", "live-banner", tone)}>
       <span className="demo-badge">{connection.stateLabel}</span>
       {connection.stateDetail}
-      <a href={appPath("/settings/connections")}>查看连接</a>
+      {connection.state === "unconfigured" ? <a href={appPath("/settings/meta-app")}>去配置 Meta App</a> : null}
+      <a href={appPath("/settings/connections")}>连接 Meta 账号</a>
     </div>
   );
 }
 
 export function MissingMetaList({ items }: { items: MissingMetaRequirement[] }) {
-  if (items.length === 0) return <span>No missing Meta requirements.</span>;
+  if (items.length === 0) return <span>当前没有缺失项。</span>;
   return (
     <div className="missing-meta-list">
       {items.map((item) => (
@@ -87,16 +88,6 @@ export function ConnectionStateNotice({ connection }: { connection: ClientApiCon
 }
 
 export function DataSourceGate({ connection, children }: { connection: ClientApiConnection; children: ReactNode }) {
-  if (connection.state === "unconfigured") {
-    return (
-      <div className="state-panel panel danger">
-        <AlertTriangle size={22} />
-        <strong>{connection.stateLabel}</strong>
-        <span>{connection.stateDetail}</span>
-        <MissingMetaList items={connection.missingItems} />
-      </div>
-    );
-  }
   return (
     <>
       <ConnectionStateNotice connection={connection} />
@@ -105,12 +96,21 @@ export function DataSourceGate({ connection, children }: { connection: ClientApi
   );
 }
 
-export function LiveEmptyState({ title = "Live data is not available", detail = "The selected Live adapter returned no rows. Demo fixtures are hidden in Live mode." }: { title?: string; detail?: string }) {
+export function LiveEmptyState({
+  title = "暂无真实数据",
+  detail = "当前实时模式没有返回数据，生产页面不会回退到演示数据。",
+  actions
+}: {
+  title?: string;
+  detail?: string;
+  actions?: ReactNode;
+}) {
   return (
     <div className="state-panel panel">
       <Info size={22} />
       <strong>{title}</strong>
       <span>{detail}</span>
+      {actions ? <div className="empty-actions">{actions}</div> : null}
     </div>
   );
 }

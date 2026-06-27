@@ -28,8 +28,10 @@ const validStates: DataState[] = [
 export function AdFlowApp({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const normalizedPathname = stripBasePath(pathname);
-  const page = pageFromPath(normalizedPathname);
-  const standalone = isStandalonePath(normalizedPathname);
+  const demoSandbox = normalizedPathname === "/demo" || normalizedPathname.startsWith("/demo/");
+  const routedPathname = demoSandbox ? stripDemoPrefix(normalizedPathname) : normalizedPathname;
+  const page = pageFromPath(routedPathname);
+  const standalone = isStandalonePath(routedPathname);
   const [toast, setToast] = useState<{ text: string; kind: "info" | "success" | "warning" | "danger" } | null>(null);
   const [dataState, setDataState] = useState<DataState>("success");
 
@@ -47,7 +49,7 @@ export function AdFlowApp({ children }: { children: ReactNode }) {
   const showToast = (text: string, kind: "info" | "success" | "warning" | "danger" = "info") => setToast({ text, kind });
 
   return (
-    <DemoProvider>
+    <DemoProvider forceMode={demoSandbox ? "demo" : "live"}>
       <AppRuntimeProvider value={{ dataState, showToast }}>
         {standalone ? (
           <>
@@ -57,7 +59,7 @@ export function AdFlowApp({ children }: { children: ReactNode }) {
             </div>
           </>
         ) : (
-          <AppShell page={page} onToast={showToast}>
+          <AppShell page={page} onToast={showToast} demoSandbox={demoSandbox}>
             {children}
             <div className={`toast ${toast ? "visible" : ""} ${toast?.kind ?? "info"}`} role="status">
               {toast?.text}
@@ -81,6 +83,12 @@ function pageFromPath(pathname: string): PageKey {
   if (pathname.startsWith("/sync-center")) return "sync-center";
   if (pathname.startsWith("/settings")) return "settings";
   return "overview";
+}
+
+function stripDemoPrefix(pathname: string): string {
+  if (pathname === "/demo") return "/overview";
+  if (pathname.startsWith("/demo/")) return pathname.slice("/demo".length) || "/overview";
+  return pathname;
 }
 
 function stripBasePath(pathname: string): string {

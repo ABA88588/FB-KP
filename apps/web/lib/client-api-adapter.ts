@@ -88,7 +88,7 @@ const liveBlockedBundle: CreatedAdBundle = {
 
 export const demoAdapter: ClientApiAdapter = {
   mode: "demo",
-  sourceLabel: "Demo Provider",
+  sourceLabel: "演示数据源",
   listAdAccounts: () => demoProvider.listAdAccounts(),
   getKpis: (context) => demoProvider.getKpis(context),
   listEntities: (level, accountId, query = "", context) => demoProvider.listEntities(level, accountId, query, context),
@@ -114,7 +114,7 @@ export function createLiveAdapter(snapshot: LiveSnapshot | null): ClientApiAdapt
   const data: LiveSnapshot = snapshot ?? { accounts: [], entities: [], creatives: [], reportRows: [], syncJobs: [] };
   return {
   mode: "live",
-  sourceLabel: "Live Meta API",
+  sourceLabel: "Live Meta",
   listAdAccounts: () => data.accounts,
   getKpis: () => liveKpis(data.reportRows),
   listEntities: (level, accountId, query = "") => data.entities.filter((entity) => entity.level === level && entity.accountId === accountId && entity.name.toLowerCase().includes(query.toLowerCase())),
@@ -181,7 +181,7 @@ export function createLiveAdapter(snapshot: LiveSnapshot | null): ClientApiAdapt
 }
 
 export function resolveInitialDataMode(): ClientDataMode {
-  return clientEnv.dataMode === "live" ? "live" : "demo";
+  return clientEnv.dataMode === "demo" ? "demo" : "live";
 }
 
 export function getClientApiAdapter(mode: ClientDataMode, liveSnapshot: LiveSnapshot | null = null): ClientApiAdapter {
@@ -197,8 +197,8 @@ export function getClientApiConnection(mode: ClientDataMode): ClientApiConnectio
       canRead: true,
       canWrite: true,
       missingItems: [],
-      stateLabel: "Demo mode",
-      stateDetail: "Using deterministic local demo data. No Meta objects are read or changed.",
+      stateLabel: "演示沙箱",
+      stateDetail: "所有数据均为模拟，不会连接 Meta，也不会写入真实广告对象。",
       writeBlockedReason: ""
     };
   }
@@ -208,13 +208,13 @@ export function getClientApiConnection(mode: ClientDataMode): ClientApiConnectio
     return {
       mode,
       state: "unconfigured",
-      sourceLabel: "Live Meta API",
+      sourceLabel: "Live Meta",
       canRead: false,
       canWrite: false,
       missingItems,
-      stateLabel: "Live mode unconfigured",
-      stateDetail: "Meta credentials are incomplete, so live pages are blocked instead of falling back to demo data.",
-      writeBlockedReason: "Live mode is missing required Meta configuration."
+      stateLabel: "未连接 Meta",
+      stateDetail: "尚未连接 Meta，请先配置 Meta App 并完成授权。",
+      writeBlockedReason: "尚未完成 Meta App 配置和账号授权，不能写入真实 Meta 对象。"
     };
   }
 
@@ -222,13 +222,13 @@ export function getClientApiConnection(mode: ClientDataMode): ClientApiConnectio
     return {
       mode,
       state: "readonly",
-      sourceLabel: "Live Meta API",
+      sourceLabel: "Live Meta",
       canRead: true,
       canWrite: false,
       missingItems,
-      stateLabel: "Live mode readonly",
-      stateDetail: "Live reads are allowed, but this session cannot change Meta objects.",
-      writeBlockedReason: "The current Live connection is readonly."
+      stateLabel: "实时只读",
+      stateDetail: "当前账号允许读取真实 Meta 数据，但写入控制仍处于只读状态。",
+      writeBlockedReason: "当前 Live 连接为只读状态。"
     };
   }
 
@@ -236,25 +236,25 @@ export function getClientApiConnection(mode: ClientDataMode): ClientApiConnectio
     return {
       mode,
       state: "write-disabled",
-      sourceLabel: "Live Meta API",
+      sourceLabel: "Live Meta",
       canRead: true,
       canWrite: false,
       missingItems,
-      stateLabel: "Live writes disabled",
-      stateDetail: "Live reads may be connected later, but write operations are disabled by configuration.",
-      writeBlockedReason: "ENABLE_META_WRITES and NEXT_PUBLIC_META_CLIENT_WRITES_READY must both be enabled."
+      stateLabel: "写入关闭",
+      stateDetail: "实时读取可用，但真实 Meta 写入未开启或尚未完成客户端写入验收。",
+      writeBlockedReason: "需要同时开启 ENABLE_META_WRITES 并完成客户端写入验收。"
     };
   }
 
   return {
     mode,
     state: "live-ready",
-    sourceLabel: "Live Meta API",
+    sourceLabel: "Live Meta",
     canRead: true,
     canWrite: true,
     missingItems,
-    stateLabel: "Live mode ready",
-    stateDetail: "Live adapter is selected. Demo fixtures are not used.",
+    stateLabel: "实时模式",
+    stateDetail: "当前页面读取数据库中的真实 Meta 数据，不使用演示数据。",
     writeBlockedReason: ""
   };
 }
@@ -264,15 +264,15 @@ export function getMissingMetaRequirements(): MissingMetaRequirement[] {
   if (!isEnabled(clientEnv.metaConfigured)) {
     missing.push({
       id: "server-meta-credentials",
-      label: "META_APP_ID / META_APP_SECRET",
-      detail: "Server-side Meta OAuth credentials must be confirmed through NEXT_PUBLIC_META_CONFIGURED=true."
+      label: "Meta App 配置",
+      detail: "需要配置 App ID、App Secret 和 OAuth Redirect URI。"
     });
   }
   return missing;
 }
 
 export function writeBlockedMessage(connection: ClientApiConnection): string {
-  return connection.writeBlockedReason || "Writes are disabled for the selected data source.";
+  return connection.writeBlockedReason || "当前数据源禁止写入。";
 }
 
 function reportRowsToCsv(rows: ReportRow[]): string {
@@ -283,16 +283,17 @@ function reportRowsToCsv(rows: ReportRow[]): string {
 }
 
 function liveKpis(rows: ReportRow[]): KpiMetric[] {
+  if (rows.length === 0) return [];
   const spend = rows.reduce((sum, row) => sum + parseMetric(row.spend), 0);
   const impressions = rows.reduce((sum, row) => sum + parseMetric(row.impressions), 0);
   const clicks = rows.reduce((sum, row) => sum + parseMetric(row.clicks), 0);
   const purchases = rows.reduce((sum, row) => sum + parseMetric(row.purchases), 0);
   const roas = rows.length > 0 ? rows.reduce((sum, row) => sum + parseMetric(row.roas), 0) / rows.length : 0;
   return [
-    { label: "Spend", value: String(Math.round(spend)), delta: "Live DB", direction: "up", note: "Synced from database", accent: true },
-    { label: "Impressions", value: String(Math.round(impressions)), delta: "Live DB", direction: "up", note: "Synced from database" },
-    { label: "Clicks", value: String(Math.round(clicks)), delta: "Live DB", direction: "up", note: "Synced from database" },
-    { label: "Purchases", value: String(Math.round(purchases)), delta: roas.toFixed(2), direction: "up", note: "Average ROAS" }
+    { label: "花费", value: String(Math.round(spend)), delta: "Live DB", direction: "up", note: "来自数据库同步", accent: true },
+    { label: "曝光", value: String(Math.round(impressions)), delta: "Live DB", direction: "up", note: "来自数据库同步" },
+    { label: "点击", value: String(Math.round(clicks)), delta: "Live DB", direction: "up", note: "来自数据库同步" },
+    { label: "购买", value: String(Math.round(purchases)), delta: roas.toFixed(2), direction: "up", note: "平均 ROAS" }
   ];
 }
 

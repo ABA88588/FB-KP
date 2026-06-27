@@ -20,7 +20,6 @@ export type DateRange = (typeof dateRanges)[number];
 export type CompareRange = (typeof compareRanges)[number];
 
 type PersistedDemoState = {
-  mode?: ClientDataMode;
   accountId?: string;
   dateRange?: DateRange;
   compareRange?: CompareRange;
@@ -49,7 +48,11 @@ type DemoContextValue = {
   touchDemoData: () => void;
 };
 
-const storageKey = "adflow.demoContext";
+const storageKeyByMode: Record<ClientDataMode, string> = {
+  live: "adflow.liveContext",
+  demo: "adflow.demoContext"
+};
+
 const fallbackAccount: AdAccount = {
   id: "act_demo",
   name: "Seoul Beauty KR",
@@ -61,17 +64,17 @@ const fallbackAccount: AdAccount = {
 
 const liveFallbackAccount: AdAccount = {
   id: "live_unconfigured",
-  name: "Live Meta Account",
-  maskedId: "not configured",
+  name: "未连接广告账户",
+  maskedId: "请先连接 Meta",
   currency: "USD",
-  timezone: "UTC",
+  timezone: "待配置",
   status: "permission-denied"
 };
 
 const DemoContext = createContext<DemoContextValue | null>(null);
 
-export function DemoProvider({ children }: { children: ReactNode }) {
-  const [mode, setModeState] = useState<ClientDataMode>(resolveInitialDataMode);
+export function DemoProvider({ children, forceMode }: { children: ReactNode; forceMode?: ClientDataMode }) {
+  const [mode, setModeState] = useState<ClientDataMode>(() => forceMode ?? resolveInitialDataMode());
   const [liveSnapshot, setLiveSnapshot] = useState<LiveSnapshot | null>(null);
   const api = useMemo(() => getClientApiAdapter(mode, liveSnapshot), [liveSnapshot, mode]);
   const connection = useMemo(() => getClientApiConnection(mode), [mode]);
@@ -86,24 +89,33 @@ export function DemoProvider({ children }: { children: ReactNode }) {
   const accountIndex = Math.max(0, accounts.findIndex((item) => item.id === account.id));
 
   useEffect(() => {
-    const raw = window.localStorage.getItem(storageKey);
+    if (forceMode && forceMode !== mode) {
+      const nextApi = getClientApiAdapter(forceMode, forceMode === "live" ? liveSnapshot : null);
+      const [nextAccount] = nextApi.listAdAccounts();
+      setModeState(forceMode);
+      setAccountId(nextAccount?.id ?? (forceMode === "live" ? liveFallbackAccount.id : fallbackAccount.id));
+      setLoadedStorage(false);
+    }
+  }, [forceMode, liveSnapshot, mode]);
+
+  useEffect(() => {
+    const raw = window.localStorage.getItem(storageKeyByMode[mode]);
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as PersistedDemoState;
-        if (parsed.mode === "demo" || parsed.mode === "live") setModeState(parsed.mode);
         if (parsed.accountId) setAccountId(parsed.accountId);
         if (parsed.dateRange && dateRanges.includes(parsed.dateRange)) setDateRangeState(parsed.dateRange);
         if (parsed.compareRange && compareRanges.includes(parsed.compareRange)) setCompareRangeState(parsed.compareRange);
       } catch {
-        window.localStorage.removeItem(storageKey);
+        window.localStorage.removeItem(storageKeyByMode[mode]);
       }
     }
     setLoadedStorage(true);
-  }, []);
+  }, [mode]);
 
   useEffect(() => {
     if (!loadedStorage) return;
-    window.localStorage.setItem(storageKey, JSON.stringify({ mode, accountId: account.id, dateRange, compareRange }));
+    window.localStorage.setItem(storageKeyByMode[mode], JSON.stringify({ accountId: account.id, dateRange, compareRange }));
   }, [account.id, compareRange, dateRange, loadedStorage, mode]);
 
   useEffect(() => {
@@ -129,6 +141,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     const queryContext: DemoQueryContext = { accountId: account.id, dateRange, compareRange };
     const touchDemoData = () => setRevision((current) => current + 1);
     const setMode = (nextMode: ClientDataMode) => {
+      if (forceMode && nextMode !== forceMode) return;
       const nextApi = getClientApiAdapter(nextMode, nextMode === "live" ? liveSnapshot : null);
       const [nextAccount] = nextApi.listAdAccounts();
       setModeState(nextMode);
@@ -146,7 +159,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       compareRange,
       revision,
       queryContext,
-      accountLabel: `广告账户 / ${account.name}`,
+      accountLabel: mode === "live" && account.id === liveFallbackAccount.id ? "广告账户 / 未连接" : `广告账户 / ${account.name}`,
       dateLabel: `${formatDateRange(dateRange)} · ${account.timezone}`,
       cycleAccount: () => {
         const nextIndex = accounts.length > 0 ? (accountIndex + 1) % accounts.length : 0;
@@ -187,7 +200,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       setMode,
       touchDemoData
     };
-  }, [account, accountIndex, accounts, api, compareRange, connection, dateRange, liveSnapshot, mode, revision]);
+  }, [account, accountIndex, accounts, api, compareRange, connection, dateRange, forceMode, liveSnapshot, mode, revision]);
 
   return <DemoContext.Provider value={value}>{children}</DemoContext.Provider>;
 }

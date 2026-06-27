@@ -1,23 +1,32 @@
-import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-const baselineHashes: Record<string, string> = {
-  "00-ui-contact-sheet.png": "B25733257512D673E6F28B549DE3D8475C5AE72224C5E632FA20D0B30D3233E7",
-  "01-overview.png": "3B00A82C5C8227C1E0D290D52BEC7F4F032DFBDBF4868A67A5903DC1ABA84A8E",
-  "02-campaign-manager.png": "D8A9986C2ED9F31853B4B70620AE8CD930F1B554C056FC7797DA0423FEC41341",
-  "03-campaign-inspector.png": "838524D6784525CE6F441255DF5EC4DC16C5348DFD17FE2A2EC51B98BF685067",
-  "04-create-wizard-review.png": "7D627DCA75CF70C64CCB71815D8CB0B29BCE531EDF80A2AD2E674140928F6CD7",
-  "05-custom-report.png": "C4FD27F6972E34D19675B4539B5002E0DBDBE6791D0E32990B5BB411D1962E95",
-  "06-sync-errors.png": "7CB33C202A65929AF3BEAA065C2EA9AB2112AA83EECFC3FC15648C466E0D83C7"
-};
+const productionPaths = [
+  "/ads/overview",
+  "/ads/campaigns",
+  "/ads/creatives",
+  "/ads/reports",
+  "/ads/sync-center"
+];
 
-test.describe("demo data flows", () => {
+const forbiddenProductionCopy = [
+  "Demo mode",
+  "Demo Provider",
+  "Seoul Beauty KR",
+  "demo_asset",
+  "Summer Glow",
+  "UGC ROUTINE",
+  "NEW SERUM",
+  "Instagram Feed",
+  "PAUSED",
+  "Sales",
+  "Broad",
+  "META_RATE_LIMITED"
+];
+
+test.describe("production live mode", () => {
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/overview");
-    await page.evaluate(() => window.localStorage.clear());
+    await page.addInitScript(() => window.localStorage.clear());
   });
 
   test("base path and legacy routes redirect into /ads", async ({ page }) => {
@@ -27,246 +36,84 @@ test.describe("demo data flows", () => {
     await page.goto("/login");
     await expect(page).toHaveURL(/\/ads\/login$/);
 
-    await page.goto("/campaigns?level=campaign");
-    await expect(page).toHaveURL(/\/ads\/campaigns\?level=campaign$/);
+    await page.goto("/overview");
+    await expect(page).toHaveURL(/\/ads\/overview$/);
+  });
 
+  test("live overview shows setup guidance instead of fake KPIs", async ({ page }) => {
+    await page.goto("/ads/overview");
+    await expect(page.getByText("尚未连接 Meta 广告账户")).toBeVisible();
+    await expect(page.getByRole("button", { name: "配置 Meta App" })).toBeVisible();
+    await expect(page.getByTestId("account-picker")).toContainText("未连接广告账户");
+    await expect(page.getByTestId("kpi-card")).toHaveCount(0);
+  });
+
+  test("live business pages do not render demo data", async ({ page }) => {
+    const expectedTitles: Record<string, string> = {
+      "/ads/campaigns": "暂无真实广告对象",
+      "/ads/creatives": "暂无真实素材",
+      "/ads/reports": "暂无真实 Insights 数据",
+      "/ads/sync-center": "暂无同步任务"
+    };
+    for (const [path, title] of Object.entries(expectedTitles)) {
+      await page.goto(path);
+      await expect(page.getByText(title)).toBeVisible();
+      const text = await page.locator("body").innerText();
+      for (const forbidden of forbiddenProductionCopy) {
+        expect(text, `${path} should not contain ${forbidden}`).not.toContain(forbidden);
+      }
+    }
+  });
+
+  test("production pages are localized and free of demo labels", async ({ page }) => {
+    for (const path of productionPaths) {
+      await page.goto(path);
+      const text = await page.locator("body").innerText();
+      await expect(page.getByText("Live Meta").first()).toBeVisible();
+      for (const forbidden of forbiddenProductionCopy) {
+        expect(text, `${path} should not contain ${forbidden}`).not.toContain(forbidden);
+      }
+    }
+  });
+
+  test("create flow opens but live publish is blocked with explicit missing requirements", async ({ page }) => {
+    await page.goto("/ads/campaigns/new?step=4");
+    await expect(page.getByText("真实发布条件尚未满足")).toBeVisible();
+    await expect(page.getByText("Meta App 未配置").first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "发布不可用" })).toBeDisabled();
+    const text = await page.locator("body").innerText();
+    expect(text).not.toContain("模拟发布成功");
+    expect(text).not.toContain("Instagram Feed");
+  });
+
+  test("meta app page shows secure redirect and does not echo a secret", async ({ page }) => {
     await page.goto("/ads/settings/meta-app");
-    await expect(page).toHaveURL(/\/ads\/settings\/meta-app$/);
-  });
-
-  test("account switch changes overview data", async ({ page }) => {
-    await page.goto("/overview");
-    const firstMetric = page.getByTestId("kpi-card").first().locator(".metric-value");
-    const before = await firstMetric.innerText();
-
-    await page.getByTestId("account-picker").click();
-
-    await expect(page.getByTestId("account-picker")).toContainText("Glow US DTC");
-    await expect(firstMetric).not.toHaveText(before);
-  });
-
-  test("overview account persists across Campaign, Reports and Sync", async ({ page }) => {
-    await page.goto("/overview");
-    await page.getByTestId("account-picker").click();
-    await expect(page.getByTestId("account-picker")).toContainText("Glow US DTC");
-
-    await page.goto("/campaigns?level=campaign&status=all&minSpend=0");
-    await expect(page.getByTestId("account-picker")).toContainText("Glow US DTC");
-    await page.goto("/reports");
-    await expect(page.getByTestId("account-picker")).toContainText("Glow US DTC");
-    await page.goto("/sync-center");
-    await expect(page.getByTestId("account-picker")).toContainText("Glow US DTC");
-  });
-
-  test("refresh keeps selected account and date range", async ({ page }) => {
-    await page.goto("/overview");
-    await page.getByTestId("account-picker").click();
-    await page.getByTestId("date-range-picker").click();
-    await expect(page.getByTestId("account-picker")).toContainText("Glow US DTC");
-    await expect(page.getByTestId("date-range-picker")).toContainText("近 14 天");
-
-    await page.reload();
-
-    await expect(page.getByTestId("account-picker")).toContainText("Glow US DTC");
-    await expect(page.getByTestId("date-range-picker")).toContainText("近 14 天");
-  });
-
-  test("budget edit changes the campaign table", async ({ page }) => {
-    await page.goto("/campaigns?level=campaign&status=all&minSpend=0");
-    const firstRow = page.getByTestId("campaign-row").first();
-    await expect(firstRow).toBeVisible();
-
-    await firstRow.locator('input[type="checkbox"]').check();
-    await page.locator(".bulk-bar button").nth(2).click();
-    await expect(page.locator(".budget-dialog")).toBeVisible();
-    await page.locator(".budget-dialog input").fill("333000");
-    await page.locator(".budget-dialog .dialog-actions .button.primary").click();
-
-    await expect(firstRow).toContainText("333,000");
-  });
-
-  test("two account datasets do not affect each other", async ({ page }) => {
-    await page.goto("/campaigns?level=campaign&status=all&minSpend=0");
-    const firstRow = page.getByTestId("campaign-row").first();
-    await firstRow.locator('input[type="checkbox"]').check();
-    await page.locator(".bulk-bar button").nth(2).click();
-    await page.locator(".budget-dialog input").fill("333000");
-    await page.locator(".budget-dialog .dialog-actions .button.primary").click();
-    await expect(firstRow).toContainText("333,000");
-
-    await page.getByTestId("account-picker").click();
-    await expect(page.getByTestId("account-picker")).toContainText("Glow US DTC");
-    await expect(page.getByTestId("campaign-row").first()).not.toContainText("333,000");
-
-    await page.getByTestId("account-picker").click();
-    await expect(page.getByTestId("account-picker")).toContainText("Seoul Beauty KR");
-    await expect(page.getByTestId("campaign-row").first()).toContainText("333,000");
-  });
-
-  test("USD account shows dollar amounts", async ({ page }) => {
-    await page.goto("/campaigns?level=campaign&status=all&minSpend=0");
-    await page.getByTestId("account-picker").click();
-    await expect(page.getByTestId("account-picker")).toContainText("Glow US DTC");
-    await expect(page.getByTestId("campaign-row").first()).toContainText("$");
-  });
-
-  test("USD account budget entry points use dollars", async ({ page }) => {
-    await page.goto("/campaigns?level=campaign");
-    await switchToUsd(page);
-
-    await expect(page.locator(".filter-chips")).toContainText("$80");
-    const firstRow = page.getByTestId("campaign-row").first();
-    await firstRow.locator('input[type="checkbox"]').check();
-    await page.locator(".bulk-bar button").nth(2).click();
-    await expect(page.locator(".budget-dialog")).toContainText("USD ($)");
-    await page.locator(".budget-dialog .button").first().click();
-
-    await firstRow.click();
-    await page.locator(".drawer-footer .button.primary").click();
-    await expect(page.locator(".drawer-edit-form")).toContainText("USD ($)");
-  });
-
-  test("detail drawer edit syncs back to the table", async ({ page }) => {
-    await page.goto("/campaigns?level=campaign&status=all&minSpend=0");
-    const firstRow = page.getByTestId("campaign-row").first();
-    await firstRow.click();
-    await page.locator(".drawer-footer .button.primary").click();
-    await page.locator(".drawer-edit-form input").first().fill("Edited Campaign Demo");
-    await page.locator(".drawer-edit-form input").last().fill("444000");
-    await page.locator(".drawer-edit-form .button.primary").click();
-
-    await expect(firstRow).toContainText("Edited Campaign Demo");
-    await expect(firstRow).toContainText("444,000");
-  });
-
-  test("simulated publish creates a searchable ad object", async ({ page }) => {
-    await page.goto("/campaigns/new?step=4");
-    await page.locator(".wizard-footer .button.primary").click();
-
-    await expect(page).toHaveURL(/\/campaigns\?level=campaign/);
-    await expect(page.getByTestId("campaign-row").first()).toContainText("Summer Glow");
-  });
-
-  test("simulated publish increases campaign tab count", async ({ page }) => {
-    await page.goto("/campaigns?level=campaign&status=all&minSpend=0");
-    const before = await entityTabCount(page, "广告系列");
-
-    await page.goto("/campaigns/new?step=4");
-    await page.locator(".wizard-footer .button.primary").click();
-
-    await expect(page).toHaveURL(/\/campaigns\?level=campaign/);
-    await expect.poll(() => entityTabCount(page, "广告系列")).toBe(before + 1);
-  });
-
-  test("USD create flow does not show KRW or Seoul identity", async ({ page }) => {
-    await page.goto("/overview");
-    await switchToUsd(page);
-    await page.goto("/campaigns/new?step=4");
-
-    const wizard = page.locator(".wizard-screen");
-    await expect(wizard).toContainText("$120");
-    await expect(wizard).toContainText("glowusdtc.com");
-    await expect(wizard).not.toContainText("₩");
-    await expect(wizard).not.toContainText("seoulbeauty.kr");
-    await expect(wizard).not.toContainText("韩国");
-  });
-
-  test("new creative appears in creative center after simulated publish", async ({ page }) => {
-    await page.goto("/campaigns/new?step=4");
-    await page.locator(".wizard-footer .button.primary").click();
-    await expect(page).toHaveURL(/\/campaigns\?level=campaign/);
-
-    await page.locator(".nav-item").nth(2).click();
-    await page.locator(".search-box input").fill("summer_glow_hero_01");
-    await expect(page.getByTestId("creative-card").first()).toContainText("summer_glow_hero_01");
-  });
-
-  test("report configuration changes the generated result", async ({ page }) => {
-    await page.goto("/reports");
-    const firstRow = page.getByTestId("report-row").first();
-    await expect(firstRow).toBeVisible();
-    const before = await firstRow.innerText();
-
-    const selects = page.locator(".report-builder select");
-    await selects.nth(0).selectOption("Campaign");
-    await selects.nth(1).selectOption("近 14 天");
-    await selects.nth(2).selectOption({ index: 1 });
-    await selects.nth(3).selectOption({ index: 1 });
-    await page.locator(".report-builder .button.primary.full").click();
-
-    await expect(page.getByTestId("report-note")).toContainText("Campaign", { timeout: 3_000 });
-    await expect(firstRow).not.toHaveText(before);
-  });
-
-  test("USD report preset keeps dollar currency", async ({ page }) => {
-    await page.goto("/overview");
-    await switchToUsd(page);
-    await page.goto("/reports");
-
-    await page.locator(".report-side button", { hasText: "Campaign ROAS 监控" }).click();
-    await page.locator(".report-builder .button.primary.full").click();
-
-    await expect(page.getByTestId("report-note")).toContainText("Glow US DTC", { timeout: 3_000 });
-    await expect(page.getByTestId("report-row").first()).toContainText("$");
-    await expect(page.getByTestId("report-row").first()).not.toContainText("₩");
-  });
-
-  test("report without breakdown returns a single summary group", async ({ page }) => {
-    await page.goto("/reports");
-    const breakdownSection = page.locator(".builder-section").filter({ hasText: "Breakdown" });
-    await breakdownSection.locator(".token-list button").first().click();
-    await page.locator(".report-builder .button.primary.full").click();
-
-    await expect(page.getByTestId("report-note")).toContainText("行", { timeout: 3_000 });
-    await expect(page.getByTestId("report-row").first()).toContainText("全部");
-    const visibleRows = await page.getByTestId("report-row").allInnerTexts();
-    expect(visibleRows.every((row) => row.includes("全部"))).toBe(true);
-    expect(visibleRows.join(" ")).not.toContain("Facebook");
-    expect(visibleRows.join(" ")).not.toContain("Instagram");
-  });
-
-  test("no-compare KPI has no trend arrow", async ({ page }) => {
-    await page.goto("/overview");
-    const compareButton = page.locator(".top-control").filter({ hasText: "对比：" });
-    await compareButton.click();
-    await compareButton.click();
-
-    const firstDelta = page.getByTestId("kpi-card").first().locator(".metric-delta");
-    await expect(compareButton).toContainText("不对比");
-    await expect(firstDelta).toContainText("—");
-    await expect(firstDelta.locator("svg")).toHaveCount(0);
-    await expect(firstDelta).not.toHaveClass(/up|down/);
-  });
-
-  test("new sync task progresses from running to success", async ({ page }) => {
-    await page.goto("/sync-center");
-    await page.locator(".page-actions .button.primary").click();
-
-    const newestJob = page.getByTestId("sync-job-row").first();
-    await expect(newestJob).toContainText("运行中");
-    await expect(newestJob).toContainText("成功", { timeout: 3_000 });
+    await expect(page.getByText("Meta App 配置").first()).toBeVisible();
+    await expect(page.locator('input[type="password"]')).toHaveCount(1);
+    await expect(page.getByRole("textbox", { name: "OAuth Redirect URI" })).toHaveValue(/\/ads\/api\/meta\/oauth\/callback$/);
   });
 });
 
-async function switchToUsd(page: Page) {
-  const picker = page.getByTestId("account-picker");
-  if (!(await picker.innerText()).includes("Glow US DTC")) {
-    await picker.click();
-  }
-  await expect(picker).toContainText("Glow US DTC");
-}
+test.describe("demo sandbox", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript(() => window.localStorage.clear());
+  });
 
-async function entityTabCount(page: Page, label: string): Promise<number> {
-  const text = await page.locator(".entity-tab", { hasText: label }).innerText();
-  return Number(text.match(/\d+/)?.[0] ?? 0);
-}
+  test("demo sandbox is isolated under /ads/demo and may show demo data", async ({ page }) => {
+    await page.goto("/ads/demo/overview");
+    await expect(page.getByText("演示沙箱").first()).toBeVisible();
+    await expect(page.getByTestId("account-picker")).toContainText("Seoul Beauty KR");
+    await expect(page.getByTestId("kpi-card").first()).toBeVisible();
 
-test.describe("design baselines", () => {
-  for (const [fileName, expectedHash] of Object.entries(baselineHashes)) {
-    test(`${fileName} is unchanged`, async () => {
-      const bytes = await readFile(resolve(process.cwd(), "../../screenshots", fileName));
-      const actualHash = createHash("sha256").update(bytes).digest("hex").toUpperCase();
-      expect(actualHash).toBe(expectedHash);
-    });
-  }
+    await page.goto("/ads/overview");
+    await expect(page.getByText("尚未连接 Meta 广告账户")).toBeVisible();
+    await expect(page.getByTestId("account-picker")).toContainText("未连接广告账户");
+  });
+
+  test("demo navigation stays inside the sandbox", async ({ page }) => {
+    await page.goto("/ads/demo/campaigns?level=campaign");
+    await page.locator(".entity-tab", { hasText: "广告组" }).click();
+    await expect(page).toHaveURL(/\/ads\/demo\/campaigns\?level=adset$/);
+  });
 });

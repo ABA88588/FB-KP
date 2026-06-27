@@ -4,7 +4,7 @@ import { Check, ChevronLeft, ChevronRight, Save, Send, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { AdAccount, CreatedAdBundle } from "@adflow/meta-client";
-import { Button, ConnectionStateNotice, DataSourceGate, LiveEmptyState } from "@/components/ui";
+import { Button, ConnectionStateNotice } from "@/components/ui";
 import type { ToastKind } from "@/lib/app-types";
 import { useDemoContext } from "@/lib/demo-context";
 import { useAppRuntime } from "@/lib/app-runtime";
@@ -39,18 +39,18 @@ type Draft = {
 };
 
 const creativeAssets = [
-  { id: "summer", title: "SUMMER GLOW", file: "summer_glow_hero_01.jpg", meta: "1080 × 1350 · 已在素材库", className: "thumb-1" },
-  { id: "serum", title: "NEW SERUM", file: "new_serum_video_15s.mp4", meta: "1080 × 1920 · 已在素材库", className: "thumb-2" },
-  { id: "bundle", title: "BEAUTY SET", file: "beauty_set_offer.jpg", meta: "1080 × 1350 · 已在素材库", className: "thumb-5" }
+  { id: "summer", title: "夏季焕亮", file: "summer_glow_hero_01.jpg", meta: "1080 × 1350 · 已在素材库", className: "thumb-1" },
+  { id: "serum", title: "新款精华", file: "new_serum_video_15s.mp4", meta: "1080 × 1920 · 已在素材库", className: "thumb-2" },
+  { id: "bundle", title: "护理套装", file: "beauty_set_offer.jpg", meta: "1080 × 1350 · 已在素材库", className: "thumb-5" }
 ] as const;
 
-const previewPlacements = ["Instagram Feed", "Instagram Story", "Facebook Feed", "Reels"] as const;
+const previewPlacements = ["Instagram 信息流", "Instagram 快拍", "Facebook 信息流", "Reels"] as const;
 
 function initialDraftForAccount(account: AdAccount): Draft {
   const isUsd = account.currency === "USD";
   return {
-    campaignName: isUsd ? "US｜Glow Routine｜Sales｜Broad" : "KR｜Summer Glow｜Sales｜Broad",
-    objective: "Sales",
+    campaignName: isUsd ? "US｜焕亮护理｜销售｜广泛受众" : "KR｜夏季焕亮｜销售｜广泛受众",
+    objective: "销售",
     specialCategory: "不属于特殊广告类别",
     budgetMode: "Campaign 预算",
     conversionLocation: "网站",
@@ -65,13 +65,13 @@ function initialDraftForAccount(account: AdAccount): Draft {
     instagram: isUsd ? "@glowusdtc" : "@seoulbeauty.kr",
     format: "单图或视频",
     primaryText: isUsd ? "Build a bright daily routine with a focused skincare set. Limited-time bundle offer." : "夏日透亮肌，从一套高效护理开始。限时组合优惠，立即查看。",
-    title: isUsd ? "Glow Routine Skincare Set" : "Summer Glow 护理组合",
+    title: isUsd ? "Glow Routine Skincare Set" : "夏季焕亮护理组合",
     description: "SKINCARE SET",
     url: isUsd ? "https://glowusdtc.com/summer-glow" : "https://example.com/summer-glow",
     cta: isUsd ? "Shop Now" : "立即购买",
     urlParams: isUsd ? "utm_source=meta&utm_campaign=us_glow" : "utm_source=meta&utm_campaign=summer_glow",
     assetId: "summer",
-    previewPlacement: "Instagram Feed"
+    previewPlacement: "Instagram 信息流"
   };
 }
 
@@ -80,6 +80,7 @@ export function CreateWizard({ showToast: providedShowToast }: { showToast?: (te
   const runtime = useAppRuntime();
   const showToast = providedShowToast ?? runtime.showToast;
   const { api, connection, account, accountLabel, touchDemoData } = useDemoContext();
+  const routePrefix = connection.mode === "demo" ? "/demo" : "";
   const draftStorageKey = useMemo(() => createDraftKey(account.id), [account.id]);
   const [step, setStep] = useState<WizardStep>(1);
   const [draft, setDraft] = useState<Draft>(() => initialDraftForAccount(account));
@@ -135,11 +136,11 @@ export function CreateWizard({ showToast: providedShowToast }: { showToast?: (te
     if (step < 4) {
       const nextStep = (step + 1) as WizardStep;
       setStep(nextStep);
-      router.replace(`/campaigns/new?step=${nextStep}`);
+      router.replace(`${routePrefix}/campaigns/new?step=${nextStep}`);
       return;
     }
     if (publishedIds) {
-      router.push(`/campaigns?level=campaign&q=${encodeURIComponent(draft.campaignName)}&status=all&minSpend=0`);
+      router.push(`${routePrefix}/campaigns?level=campaign&q=${encodeURIComponent(draft.campaignName)}&status=all&minSpend=0`);
       return;
     }
     const asset = creativeAssets.find((item) => item.id === draft.assetId) ?? creativeAssets[0];
@@ -165,17 +166,17 @@ export function CreateWizard({ showToast: providedShowToast }: { showToast?: (te
     touchDemoData();
     window.localStorage.setItem(`adflow.lastPublishedBundle.${account.id}`, JSON.stringify(ids));
     showToast(connection.mode === "demo" ? `模拟发布成功：Campaign ${ids.campaignId}，Ad ${ids.adId} 已写入 DemoProvider` : `Live 发布请求已提交：Campaign ${ids.campaignId}，Ad ${ids.adId}`, "success");
-    window.setTimeout(() => router.push(`/campaigns?level=campaign&q=${encodeURIComponent(draft.campaignName)}&status=all&minSpend=0`), 500);
+    window.setTimeout(() => router.push(`${routePrefix}/campaigns?level=campaign&q=${encodeURIComponent(draft.campaignName)}&status=all&minSpend=0`), 500);
   };
 
   const back = () => {
     if (step === 1) {
-      router.push("/campaigns?level=campaign");
+      router.push(`${routePrefix}/campaigns?level=campaign`);
       return;
     }
     const previous = (step - 1) as WizardStep;
     setStep(previous);
-    router.replace(`/campaigns/new?step=${previous}`);
+    router.replace(`${routePrefix}/campaigns/new?step=${previous}`);
   };
 
   return (
@@ -186,18 +187,14 @@ export function CreateWizard({ showToast: providedShowToast }: { showToast?: (te
           <h1>创建销售广告</h1>
         </div>
         <div className="draft-state"><Check size={14} /> {draftStatus}</div>
-        <button type="button" onClick={() => router.push("/campaigns?level=campaign")} aria-label="关闭向导"><X size={18} /></button>
+        <button type="button" onClick={() => router.push(`${routePrefix}/campaigns?level=campaign`)} aria-label="关闭向导"><X size={18} /></button>
       </header>
 
-      <WizardStepper step={step} setStep={(nextStep) => { setStep(nextStep); router.replace(`/campaigns/new?step=${nextStep}`); }} />
+      <WizardStepper step={step} setStep={(nextStep) => { setStep(nextStep); router.replace(`${routePrefix}/campaigns/new?step=${nextStep}`); }} />
 
       <div className="wizard-body inline">
         {connection.mode === "live" ? (
-          <div className="wizard-live-state">
-            <DataSourceGate connection={connection}>
-              <LiveEmptyState title="Live create flow is not available" detail="The Live client adapter skeleton has no create workflow wired, so Demo campaign drafts and previews are hidden." />
-            </DataSourceGate>
-          </div>
+          <LiveCreateReadiness connection={connection} />
         ) : (
           <>
         <div className="wizard-form">
@@ -216,7 +213,10 @@ export function CreateWizard({ showToast: providedShowToast }: { showToast?: (te
         <Button onClick={back}><ChevronLeft size={14} /> {step === 1 ? "取消" : "上一步"}</Button>
         <div>
           {connection.mode === "live" ? (
-            <Button variant="primary" onClick={() => router.push("/settings/connections")}>连接设置</Button>
+            <>
+              <Button onClick={() => router.push("/settings/write-controls")}>配置写入条件</Button>
+              <Button variant="primary" disabled>发布不可用</Button>
+            </>
           ) : (
             <>
               <Button onClick={saveDraft}><Save size={14} /> 保存草稿</Button>
@@ -228,6 +228,31 @@ export function CreateWizard({ showToast: providedShowToast }: { showToast?: (te
         </div>
       </footer>
     </section>
+  );
+}
+
+function LiveCreateReadiness({ connection }: { connection: ClientApiConnection }) {
+  const missing = [
+    "Meta App 未配置",
+    "Meta 账号未连接或未完成 OAuth 授权",
+    "广告账户未加入 allowed account IDs",
+    "写入总开关未开启",
+    "紧急只读仍处于开启状态",
+    "Token 未确认包含 ads_management 权限"
+  ];
+  return (
+    <div className="wizard-live-state">
+      <ConnectionStateNotice connection={connection} />
+      <section className="state-panel panel warning">
+        <strong>真实发布条件尚未满足</strong>
+        <span>生产 Live 流程不会执行模拟发布。请完成以下条件后再创建真实 Campaign、Ad Set、Creative 和 Ad，新对象会默认保持已暂停。</span>
+        <div className="missing-meta-list">
+          {missing.map((item) => (
+            <div key={item}><strong>{item}</strong><span>需要在 Meta 配置、连接或写入控制中完成。</span></div>
+          ))}
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -261,14 +286,14 @@ function CampaignStep({ draft, updateDraft }: { draft: Draft; updateDraft: (patc
         <p>创建后默认保持暂停，确认无误后再启用。</p>
         <label>名称 <em>*</em><input value={draft.campaignName} onChange={(event) => updateDraft({ campaignName: event.target.value })} /></label>
         <div className="form-grid">
-          <label>目标<select value={draft.objective} onChange={(event) => updateDraft({ objective: event.target.value })}><option>Sales</option><option>Leads</option><option>Traffic</option></select></label>
+          <label>目标<select value={draft.objective} onChange={(event) => updateDraft({ objective: event.target.value })}><option>销售</option><option>潜在客户</option><option>访问量</option></select></label>
           <label>特殊广告类别<select value={draft.specialCategory} onChange={(event) => updateDraft({ specialCategory: event.target.value })}><option>不属于特殊广告类别</option><option>就业</option><option>住房</option><option>信贷</option></select></label>
         </div>
         <label>Campaign 预算模式<select value={draft.budgetMode} onChange={(event) => updateDraft({ budgetMode: event.target.value })}><option>Campaign 预算</option><option>广告组预算</option></select></label>
       </div>
       <div className="form-card">
         <h2>默认状态</h2>
-        <label className="radio-card selected"><input type="radio" checked readOnly /><span><strong>PAUSED</strong><small>所有对象先创建为暂停状态</small></span></label>
+        <label className="radio-card selected"><input type="radio" checked readOnly /><span><strong>已暂停</strong><small>所有对象先创建为暂停状态</small></span></label>
       </div>
     </section>
   );
@@ -353,13 +378,13 @@ function ReviewStep({ draft, currency, connection, published, publishedIds }: { 
         <span><Check size={15} /></span>
         <div>
           <strong>{published ? "演示发布已完成" : "基础检查通过"}</strong>
-          <p>{publishedIds ? `Campaign ${publishedIds.campaignId} / Ad ${publishedIds.adId}` : "将创建 1 个 Campaign、1 个 Ad Set、1 个 Creative 和 1 个 Ad，全部为 PAUSED。"}</p>
+          <p>{publishedIds ? `Campaign ${publishedIds.campaignId} / Ad ${publishedIds.adId}` : "将创建 1 个广告系列、1 个广告组、1 个 Creative 和 1 个广告，全部为已暂停。"}</p>
         </div>
       </div>
-      <ReviewCard title="Campaign" rows={[["名称", draft.campaignName], ["目标", draft.objective], ["特殊广告类别", draft.specialCategory], ["状态", "PAUSED"]]} />
+      <ReviewCard title="Campaign" rows={[["名称", draft.campaignName], ["目标", draft.objective], ["特殊广告类别", draft.specialCategory], ["状态", "已暂停"]]} />
       <ReviewCard title="Ad Set" rows={[["转化位置", draft.conversionLocation], ["优化事件", draft.event], ["日预算", formatCurrency(Number(draft.budget), currency)], ["受众", `${draft.audience} · ${draft.placement}`], ["归因窗口", draft.attribution]]} />
       <ReviewCard title="Ad" rows={[["Facebook Page", draft.page], ["Instagram", draft.instagram], ["素材", creativeAssets.find((item) => item.id === draft.assetId)?.file ?? "—"], ["标题", draft.title], ["网站 URL", draft.url], ["CTA", draft.cta]]} />
-      <ReviewCard title="发布前检查" rows={[["将创建对象", "4 个"], ["默认状态", "PAUSED"], ["权限是否完整", connection.mode === "demo" ? "演示权限完整" : connection.stateLabel], ["阻塞错误", connection.canWrite ? "无" : connection.writeBlockedReason], ["数据模式", connection.mode === "demo" ? "Demo Provider，不会写入 Meta" : connection.sourceLabel]]} />
+      <ReviewCard title="发布前检查" rows={[["将创建对象", "4 个"], ["默认状态", "已暂停"], ["权限是否完整", connection.mode === "demo" ? "演示权限完整" : connection.stateLabel], ["阻塞错误", connection.canWrite ? "无" : connection.writeBlockedReason], ["数据模式", connection.mode === "demo" ? "演示数据源，不会写入 Meta" : connection.sourceLabel]]} />
     </section>
   );
 }

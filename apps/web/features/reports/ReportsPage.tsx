@@ -107,13 +107,14 @@ export function ReportsPage({
   const resultColumns = useMemo(() => ["日期", activeBreakdownLabel, ...config.metrics.map((metric) => metricLabels[metric])], [activeBreakdownLabel, config.metrics]);
   const rowTemplate = `1fr 1.2fr repeat(${config.metrics.length}, 0.9fr)`;
   const chartMetric = config.metrics[0] ?? "spend";
+  const hasLiveRows = !(connection.mode === "live" && rows.length === 0);
 
   useEffect(() => {
     if (connection.mode === "live") {
       setRows([]);
-      setStage("Live report adapter skeleton");
+      setStage("等待真实 Insights");
       setProgress(0);
-      setNote("Live mode does not use generated Demo report rows.");
+      setNote("实时模式不会生成演示报表行，请先同步真实 Insights。");
       return;
     }
     setConfig((current) => {
@@ -160,9 +161,9 @@ export function ReportsPage({
     if (connection.mode === "live") {
       setRows([]);
       setProgress(0);
-      setStage("Live report adapter skeleton");
-      setNote("No Live report endpoint is wired in the client adapter skeleton.");
-      showToast("Live report adapter skeleton has no rows to display.", "warning");
+      setStage("等待真实 Insights");
+      setNote("请先在同步中心同步真实 Insights，再运行报表。");
+      showToast("暂无真实 Insights 数据，不能生成生产报表。", "warning");
       return;
     }
     if (config.metrics.length === 0) {
@@ -247,7 +248,7 @@ export function ReportsPage({
         className="report-header"
         eyebrow={accountLabel}
         title="自定义报表"
-        description="使用允许的指标和 Breakdown 构建报表"
+        description={connection.mode === "live" && !hasLiveRows ? "等待同步真实 Insights 后再生成报表" : "使用允许的指标和 Breakdown 构建报表"}
         actions={
           <>
             <Button onClick={() => setPresetPanelOpen((open) => !open)}>打开预设</Button>
@@ -256,8 +257,17 @@ export function ReportsPage({
         }
       />
 
-      {connection.mode === "live" && rows.length === 0 ? (
-        <LiveEmptyState title="Live report data is not available" detail="The Live client adapter returned no report rows, so generated Demo report data is hidden." />
+      {!hasLiveRows ? (
+        <LiveEmptyState
+          title="暂无真实 Insights 数据"
+          detail="同步 Insights 后可按层级、日期、指标和 Breakdown 创建报表。生产 Live 模式不会生成模拟报表。"
+          actions={
+            <>
+              <Button variant="primary" disabled={!connection.canRead} onClick={() => showToast(connection.canRead ? "已提交同步 Insights 任务。" : connection.stateDetail, connection.canRead ? "success" : "warning")}>同步 Insights</Button>
+              <Button onClick={() => setPresetPanelOpen(true)}>配置报表</Button>
+            </>
+          }
+        />
       ) : (
         <>
       <div className="report-layout three">

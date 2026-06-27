@@ -88,6 +88,8 @@ export function WriteControlsPage() {
           <a href={appPath("/settings/meta-app")}>Meta App</a>
           <a className="active" href={appPath("/settings/write-controls")}>写入控制</a>
           <a href={appPath("/settings/members")}>成员与角色</a>
+          <a href={appPath("/sync-center")}>审计日志</a>
+          <a href={appPath("/demo/overview")}>演示沙箱</a>
         </aside>
         <section className="settings-content">
           <article className="panel connection-detail">

@@ -103,6 +103,8 @@ export function SettingsPage({ showToast: providedShowToast }: { showToast?: (te
           <a href={appPath("/settings/meta-app")}>Meta App</a>
           <a href={appPath("/settings/write-controls")}>写入控制</a>
           <a href={appPath("/settings/members")}>成员与角色</a>
+          <a href={appPath("/sync-center")}>审计日志</a>
+          <a href={appPath("/demo/overview")}>演示沙箱</a>
         </aside>
         <section className="settings-content">
           {loading ? <article className="panel connection-detail">正在读取连接状态...</article> : null}

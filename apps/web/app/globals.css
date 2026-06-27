@@ -581,6 +581,7 @@ button.sync-row.selected { background: var(--selected); }
 .state-panel { display: grid; place-items: center; min-height: 360px; padding: 28px; text-align: center; }
 .state-panel strong { margin-top: 10px; font-size: 16px; }
 .state-panel span { max-width: 420px; margin-top: 5px; color: var(--muted); font-size: 12px; }
+.empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 16px; }
 .state-panel .missing-meta-list { width: min(620px, 100%); margin-top: 14px; text-align: left; border-top: 0; }
 .state-panel.warning { color: var(--warning); background: #fff7ed; }
 .state-panel.danger { color: var(--danger); background: #fffafa; }
