@@ -127,6 +127,78 @@ test.describe("production live mode", () => {
     expect(text).not.toContain("Token Scope");
     expect(text).not.toContain("write controls");
   });
+
+  test("meta app config saves supported Graph API versions without native pattern validation", async ({ page }) => {
+    const savedBodies: Record<string, unknown>[] = [];
+    await mockMetaAppSettings(page, {
+      configured: false,
+      secretConfigured: false,
+      graphApiVersion: "v25.0"
+    }, savedBodies);
+
+    await page.goto("/ads/settings/meta-app");
+    await expect(page.getByRole("button", { name: "测试配置" })).toBeDisabled();
+    await page.getByLabel("Meta App ID").fill("123456789012345");
+    await page.getByLabel("Meta App Secret").fill("test-input-value");
+    await page.getByLabel("Graph API 版本").fill("v25.0");
+    await page.getByRole("button", { name: "保存配置" }).click();
+
+    await expect(page.getByText("配置已保存。应用密钥已加密写入数据库，前端不会回显明文。")).toBeVisible();
+    await expect(page.getByLabel("Graph API 版本")).toHaveValue("v25.0");
+    await expect(page.locator(".detail-grid")).toContainText("应用 ID");
+    await expect(page.locator(".detail-grid")).toContainText("已保存");
+    await expect(page.locator(".detail-grid")).toContainText("v25.0");
+    await expect(page.getByRole("button", { name: "测试配置" })).toBeEnabled();
+    expect(savedBodies).toHaveLength(1);
+    expect(savedBodies[0]?.graphApiVersion).toBe("v25.0");
+  });
+
+  test("meta app config normalizes 25.0 and preserves secret on validation failure", async ({ page }) => {
+    const savedBodies: Record<string, unknown>[] = [];
+    await mockMetaAppSettings(page, {
+      configured: false,
+      secretConfigured: false,
+      graphApiVersion: "v25.0"
+    }, savedBodies);
+
+    await page.goto("/ads/settings/meta-app");
+    await page.getByLabel("Meta App ID").fill("123456789012345");
+    await page.getByLabel("Meta App Secret").fill("input-value-that-stays");
+    await page.getByLabel("Graph API 版本").fill("abc");
+    await page.getByRole("button", { name: "保存配置" }).click();
+
+    await expect(page.getByText("请输入 Graph API 版本，例如 v25.0")).toBeVisible();
+    await expect(page.getByLabel("Meta App Secret")).toHaveValue("input-value-that-stays");
+    expect(savedBodies).toHaveLength(0);
+
+    await page.getByLabel("Graph API 版本").fill("25.0");
+    await page.getByRole("button", { name: "保存配置" }).click();
+
+    await expect(page.getByText("配置已保存。应用密钥已加密写入数据库，前端不会回显明文。")).toBeVisible();
+    await expect(page.getByLabel("Graph API 版本")).toHaveValue("v25.0");
+    expect(savedBodies).toHaveLength(1);
+    expect(savedBodies[0]?.graphApiVersion).toBe("v25.0");
+    expect(savedBodies[0]?.metaAppSecret).toBe("input-value-that-stays");
+  });
+
+  test("meta app config does not clear an already saved secret when saving again", async ({ page }) => {
+    const savedBodies: Record<string, unknown>[] = [];
+    await mockMetaAppSettings(page, {
+      configured: true,
+      secretConfigured: true,
+      graphApiVersion: "v24.0"
+    }, savedBodies);
+
+    await page.goto("/ads/settings/meta-app");
+    await expect(page.getByRole("button", { name: "测试配置" })).toBeEnabled();
+    await page.getByLabel("Graph API 版本").fill("25.0");
+    await page.getByRole("button", { name: "保存配置" }).click();
+
+    await expect(page.getByText("配置已保存。应用密钥已加密写入数据库，前端不会回显明文。")).toBeVisible();
+    expect(savedBodies).toHaveLength(1);
+    expect(savedBodies[0]?.graphApiVersion).toBe("v25.0");
+    expect(savedBodies[0]).not.toHaveProperty("metaAppSecret");
+  });
 });
 
 test.describe("demo sandbox", () => {
@@ -153,3 +225,52 @@ test.describe("demo sandbox", () => {
     await expect(page).toHaveURL(/\/ads\/demo\/campaigns\?level=adset$/);
   });
 });
+
+async function mockMetaAppSettings(
+  page: import("@playwright/test").Page,
+  state: { configured: boolean; secretConfigured: boolean; graphApiVersion: string },
+  savedBodies: Record<string, unknown>[]
+) {
+  await page.route("**/ads/api/settings/meta-app", async (route) => {
+    const request = route.request();
+    if (request.method() === "GET") {
+      await route.fulfill({ json: { ok: true, data: metaAppStatus(state) } });
+      return;
+    }
+    if (request.method() === "PUT") {
+      const body = request.postDataJSON() as Record<string, unknown>;
+      const graphApiVersion = typeof body.graphApiVersion === "string" ? body.graphApiVersion : state.graphApiVersion;
+      savedBodies.push(body);
+      await route.fulfill({
+        json: {
+          ok: true,
+          data: metaAppStatus({
+            configured: true,
+            secretConfigured: true,
+            graphApiVersion
+          })
+        }
+      });
+      return;
+    }
+    await route.fallback();
+  });
+}
+
+function metaAppStatus(state: { configured: boolean; secretConfigured: boolean; graphApiVersion: string }) {
+  return {
+    organizationId: "11111111-1111-4111-8111-111111111111",
+    source: state.configured ? "database" : "unconfigured",
+    configured: state.configured,
+    metaAppId: state.configured ? "123456789012345" : "",
+    metaAppIdMasked: state.configured ? "1234...2345" : "",
+    graphApiVersion: state.graphApiVersion,
+    oauthRedirectUri: "http://127.0.0.1:3007/ads/api/meta/oauth/callback",
+    enableMetaWrites: false,
+    emergencyReadOnly: true,
+    allowedAdAccountIds: [],
+    secretConfigured: state.secretConfigured,
+    updatedAt: null,
+    missing: state.configured ? [] : ["META_APP_ID", "META_APP_SECRET"]
+  };
+}

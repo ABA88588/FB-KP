@@ -1,7 +1,18 @@
 import { describe, expect, it } from "vitest";
+import { normalizeGraphApiVersion } from "../lib/graph-api-version";
 import { maskMetaAppId, metaAppConfigAuditSnapshot, sanitizeAllowedAdAccountIds } from "../lib/meta-app-config";
 
 describe("Meta App config helpers", () => {
+  it("normalizes supported Graph API versions", () => {
+    expect(normalizeGraphApiVersion("v25.0")).toBe("v25.0");
+    expect(normalizeGraphApiVersion("25.0")).toBe("v25.0");
+    expect(normalizeGraphApiVersion(" v24.0 ")).toBe("v24.0");
+    expect(normalizeGraphApiVersion("24.0")).toBe("v24.0");
+    expect(normalizeGraphApiVersion("v20.0")).toBe("v20.0");
+    expect(normalizeGraphApiVersion("abc")).toBeNull();
+    expect(normalizeGraphApiVersion("v19.0")).toBeNull();
+  });
+
   it("masks app ids without exposing the full value", () => {
     expect(maskMetaAppId("123456789012345")).toBe("1234...2345");
     expect(maskMetaAppId("12345678")).toBe("12345678");

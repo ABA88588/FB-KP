@@ -4,6 +4,7 @@ import { Copy } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { apiPath, appPath } from "@/lib/app-paths";
 import { useAppRuntime } from "@/lib/app-runtime";
+import { graphApiVersionError, normalizeGraphApiVersion } from "@/lib/graph-api-version";
 import { Button, PageHeader } from "@/components/ui";
 
 type MetaAppStatus = {
@@ -33,10 +34,12 @@ export function MetaAppSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [message, setMessage] = useState("");
+  const [formError, setFormError] = useState("");
 
   const load = async () => {
     setLoading(true);
     setMessage("");
+    setFormError("");
     const response = await fetch(apiPath("/api/settings/meta-app"), { cache: "no-store" });
     const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; data?: MetaAppStatus; error?: string };
     setLoading(false);
@@ -62,14 +65,21 @@ export function MetaAppSettingsPage() {
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const normalizedGraphApiVersion = normalizeGraphApiVersion(graphApiVersion);
+    if (!normalizedGraphApiVersion) {
+      setFormError(graphApiVersionError);
+      setMessage("");
+      return;
+    }
     setSaving(true);
     setMessage("");
+    setFormError("");
     const response = await fetch(apiPath("/api/settings/meta-app"), {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        metaAppId,
-        graphApiVersion,
+        metaAppId: metaAppId.trim(),
+        graphApiVersion: normalizedGraphApiVersion,
         oauthRedirectUri,
         enableMetaWrites: status?.enableMetaWrites ?? false,
         emergencyReadOnly: status?.emergencyReadOnly ?? true,
@@ -86,6 +96,9 @@ export function MetaAppSettingsPage() {
     }
     setMetaAppSecret("");
     setStatus(payload.data);
+    setMetaAppId(payload.data.metaAppId);
+    setGraphApiVersion(payload.data.graphApiVersion);
+    setOauthRedirectUri(payload.data.oauthRedirectUri);
     setMessage("配置已保存。应用密钥已加密写入数据库，前端不会回显明文。");
     showToast("Meta App 配置已保存", "success");
   };
@@ -150,7 +163,7 @@ export function MetaAppSettingsPage() {
             {loading ? <p>正在读取配置...</p> : null}
           </article>
 
-          <form className="panel auth-form" onSubmit={(event) => void save(event)}>
+          <form className="panel auth-form" noValidate onSubmit={(event) => void save(event)}>
             <div className="panel-header"><div><h2>配置表单</h2><p>应用密钥只允许输入，不会从服务端回显。</p></div></div>
             <label>
               <span>Meta App ID</span>
@@ -162,7 +175,7 @@ export function MetaAppSettingsPage() {
             </label>
             <label>
               <span>Graph API 版本</span>
-              <input value={graphApiVersion} onChange={(event) => setGraphApiVersion(event.target.value)} required pattern="^v[0-9]+\\.[0-9]+$" />
+              <input value={graphApiVersion} onChange={(event) => { setGraphApiVersion(event.target.value); setFormError(""); }} required />
             </label>
             <label>
               <span>OAuth 回调地址</span>
@@ -171,6 +184,7 @@ export function MetaAppSettingsPage() {
                 <Button size="compact" onClick={() => void copyRedirectUri()} aria-label="复制 OAuth 回调地址"><Copy size={14} /></Button>
               </div>
             </label>
+            {formError ? <div className="form-error">{formError}</div> : null}
             {message ? <div className={message.includes("失败") ? "form-error" : "state-notice success"}>{message}</div> : null}
             <div className="connection-actions">
               <Button variant="primary" type="submit" disabled={saving}>{saving ? "保存中..." : "保存配置"}</Button>

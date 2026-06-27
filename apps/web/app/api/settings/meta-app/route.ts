@@ -11,13 +11,21 @@ import {
   type MetaAppConfigError
 } from "@/lib/meta-app-config";
 import { toNullablePrismaJson, toPrismaJson } from "@/lib/prisma-json";
+import { graphApiVersionError, normalizeGraphApiVersion } from "@/lib/graph-api-version";
 import { databaseAuthRepository, resolveSessionToken } from "@/lib/server-auth";
 import { loadServerEnv } from "@/lib/server-env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const graphApiVersionSchema = z.string().trim().regex(/^v\d+\.\d+$/, "Expected a Meta Graph API version like v25.0");
+const graphApiVersionSchema = z.string().transform((value, context) => {
+  const normalized = normalizeGraphApiVersion(value);
+  if (!normalized) {
+    context.addIssue({ code: "custom", message: graphApiVersionError });
+    return z.NEVER;
+  }
+  return normalized;
+});
 
 const updateSchema = z.object({
   organizationId: z.string().uuid().optional(),
@@ -69,7 +77,7 @@ export async function PUT(request: NextRequest) {
   const body: unknown = await request.json().catch((): Record<string, never> => ({}));
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ ok: false, error: parsed.error.message, meta: { requestId } }, { status: 400 });
+    return NextResponse.json({ ok: false, error: parsed.error.issues[0]?.message ?? "保存配置失败。", meta: { requestId } }, { status: 400 });
   }
 
   const auth = await resolveSettingsMembership(request, parsed.data.organizationId ?? null, "connection:write", requestId);
