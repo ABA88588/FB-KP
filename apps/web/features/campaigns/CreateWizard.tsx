@@ -4,7 +4,7 @@ import { Check, ChevronLeft, ChevronRight, Save, Send, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { AdAccount, CreatedAdBundle } from "@adflow/meta-client";
-import { Button, ConnectionStateNotice } from "@/components/ui";
+import { Button } from "@/components/ui";
 import type { ToastKind } from "@/lib/app-types";
 import { useDemoContext } from "@/lib/demo-context";
 import { useAppRuntime } from "@/lib/app-runtime";
@@ -55,20 +55,20 @@ function initialDraftForAccount(account: AdAccount): Draft {
     budgetMode: "Campaign 预算",
     conversionLocation: "网站",
     event: "Purchase",
-    pixel: isUsd ? "Glow US Web Pixel · 7184••••" : "Seoul Beauty Web Pixel · 9342••••",
+    pixel: isUsd ? "Glow 美国网站 Pixel · 7184••••" : "首尔美妆网站 Pixel · 9342••••",
     budget: isUsd ? "120" : "260000",
     schedule: "2026-06-26 09:00 起 · 持续投放",
-    audience: isUsd ? "United States · 25–44 · Women" : "韩国 · 23–45 · Women",
+    audience: isUsd ? "美国 · 25–44 · 女性" : "韩国 · 23–45 · 女性",
     placement: "Advantage+ 版位",
     attribution: "7-day click or 1-day view",
-    page: isUsd ? "Glow US DTC" : "Seoul Beauty Official",
-    instagram: isUsd ? "@glowusdtc" : "@seoulbeauty.kr",
+    page: isUsd ? "Glow 美国演示主页" : "首尔美妆演示主页",
+    instagram: isUsd ? "@glowusdtc" : "@seoulbeauty_demo",
     format: "单图或视频",
-    primaryText: isUsd ? "Build a bright daily routine with a focused skincare set. Limited-time bundle offer." : "夏日透亮肌，从一套高效护理开始。限时组合优惠，立即查看。",
-    title: isUsd ? "Glow Routine Skincare Set" : "夏季焕亮护理组合",
+    primaryText: isUsd ? "用一套高效护理建立明亮日常。限时组合优惠，立即查看。" : "夏日透亮肌，从一套高效护理开始。限时组合优惠，立即查看。",
+    title: isUsd ? "Glow 日常护理套装" : "夏季焕亮护理组合",
     description: "SKINCARE SET",
     url: isUsd ? "https://glowusdtc.com/summer-glow" : "https://example.com/summer-glow",
-    cta: isUsd ? "Shop Now" : "立即购买",
+    cta: isUsd ? "立即选购" : "立即购买",
     urlParams: isUsd ? "utm_source=meta&utm_campaign=us_glow" : "utm_source=meta&utm_campaign=summer_glow",
     assetId: "summer",
     previewPlacement: "Instagram 信息流"
@@ -194,11 +194,10 @@ export function CreateWizard({ showToast: providedShowToast }: { showToast?: (te
 
       <div className="wizard-body inline">
         {connection.mode === "live" ? (
-          <LiveCreateReadiness connection={connection} />
+          <LiveCreateReadiness />
         ) : (
           <>
         <div className="wizard-form">
-          <ConnectionStateNotice connection={connection} />
           {step === 1 ? <CampaignStep draft={draft} updateDraft={updateDraft} /> : null}
           {step === 2 ? <AdSetStep draft={draft} updateDraft={updateDraft} /> : null}
           {step === 3 ? <CreativeStep draft={draft} updateDraft={updateDraft} /> : null}
@@ -231,18 +230,17 @@ export function CreateWizard({ showToast: providedShowToast }: { showToast?: (te
   );
 }
 
-function LiveCreateReadiness({ connection }: { connection: ClientApiConnection }) {
+function LiveCreateReadiness() {
   const missing = [
     "Meta App 未配置",
     "Meta 账号未连接或未完成 OAuth 授权",
-    "广告账户未加入 allowed account IDs",
+    "广告账户未加入允许写入的广告账户 ID",
     "写入总开关未开启",
     "紧急只读仍处于开启状态",
     "Token 未确认包含 ads_management 权限"
   ];
   return (
     <div className="wizard-live-state">
-      <ConnectionStateNotice connection={connection} />
       <section className="state-panel panel warning">
         <strong>真实发布条件尚未满足</strong>
         <span>生产 Live 流程不会执行模拟发布。请完成以下条件后再创建真实 Campaign、Ad Set、Creative 和 Ad，新对象会默认保持已暂停。</span>

@@ -42,7 +42,7 @@ export function DemoModeBanner() {
   return (
     <div className="demo-banner">
       <span className="demo-badge">演示沙箱</span>
-      所有数据均为模拟，不会连接 Meta，也不会写入真实广告对象。
+      所有数据均为模拟，不会连接 Meta，也不会写入真实广告账户。
       <a href={appPath("/overview")}>返回实时模式</a>
     </div>
   );
@@ -50,13 +50,18 @@ export function DemoModeBanner() {
 
 export function DataSourceBanner({ connection }: { connection: ClientApiConnection }) {
   if (connection.mode === "demo") return <DemoModeBanner />;
-  const tone = connection.state === "unconfigured" ? "danger" : connection.state === "live-ready" ? "success" : "warning";
+  const tone = connection.state === "unconfigured" ? "warning" : connection.state === "live-ready" ? "success" : "info";
+  const action =
+    connection.state === "unconfigured"
+      ? { label: "配置 Meta App", href: "/settings/meta-app" }
+      : connection.state === "live-ready"
+        ? { label: "刷新数据", href: "/sync-center" }
+        : { label: "连接 Meta 账号", href: "/settings/connections" };
   return (
-    <div className={cn("demo-banner", "live-banner", tone)}>
+    <div className={cn("access-status-bar", "live-banner", tone)}>
       <span className="demo-badge">{connection.stateLabel}</span>
       {connection.stateDetail}
-      {connection.state === "unconfigured" ? <a href={appPath("/settings/meta-app")}>去配置 Meta App</a> : null}
-      <a href={appPath("/settings/connections")}>连接 Meta 账号</a>
+      <a href={appPath(action.href)}>{action.label}</a>
     </div>
   );
 }
@@ -88,31 +93,82 @@ export function ConnectionStateNotice({ connection }: { connection: ClientApiCon
 }
 
 export function DataSourceGate({ connection, children }: { connection: ClientApiConnection; children: ReactNode }) {
-  return (
-    <>
-      <ConnectionStateNotice connection={connection} />
-      {children}
-    </>
-  );
+  void connection;
+  return <>{children}</>;
 }
 
 export function LiveEmptyState({
   title = "暂无真实数据",
   detail = "当前实时模式没有返回数据，生产页面不会回退到演示数据。",
-  actions
+  actions,
+  requirements
 }: {
   title?: string;
   detail?: string;
   actions?: ReactNode;
+  requirements?: ReactNode;
 }) {
   return (
     <div className="state-panel panel">
       <Info size={22} />
       <strong>{title}</strong>
       <span>{detail}</span>
+      {requirements ? <div className="empty-requirements">{requirements}</div> : null}
       {actions ? <div className="empty-actions">{actions}</div> : null}
     </div>
   );
+}
+
+export function AccessGuidePanel({ connection }: { connection: ClientApiConnection }) {
+  const metaConfigured = connection.state !== "unconfigured";
+  const accountConnected = connection.canRead;
+  const steps = [
+    { title: "配置 Meta App", detail: "填写 App ID、App Secret 和 OAuth 回调地址。", status: metaConfigured ? "已完成" : "未完成", href: "/settings/meta-app", action: "去配置", disabled: false },
+    { title: "连接 Meta 账号", detail: "由所有者或管理员发起 OAuth 授权。", status: accountConnected ? "已连接" : "未连接", href: "/settings/connections", action: "连接账号", disabled: !metaConfigured, reason: "需要先配置 Meta App" },
+    { title: "同步广告账户", detail: "同步广告对象、素材、Insights 和资产。", status: accountConnected ? "未同步" : "未同步", href: "/sync-center", action: "立即同步", disabled: !accountConnected, reason: metaConfigured ? "需要先连接 Meta 账号" : "需要先配置 Meta App" },
+    { title: "开启写入控制", detail: "默认只读，测试账户验收后再开启写入。", status: "默认只读", href: "/settings/write-controls", action: "查看写入控制", disabled: false }
+  ];
+  return (
+    <section className="access-guide panel" data-testid="live-access-guide">
+      <div className="access-guide-main">
+        <div className="access-guide-heading">
+          <div className="eyebrow">正式 Live 接入</div>
+          <h2>开始连接你的 Meta 广告账户</h2>
+          <p>完成以下步骤后，系统将展示真实花费、ROAS、转化、曝光、广告健康和账户趋势。</p>
+        </div>
+        <div className="access-steps">
+          {steps.map((step, index) => (
+            <article key={step.title} className="access-step">
+              <span className="step-index">{index + 1}</span>
+              <div>
+                <strong>{step.title}</strong>
+                <p>{step.detail}</p>
+                <small>{step.status}</small>
+              </div>
+              <div className="step-action">
+                <a className={cn("button", step.disabled && "disabled")} href={step.disabled ? undefined : appPath(step.href)} aria-disabled={step.disabled}>
+                  {step.action}
+                </a>
+                {step.disabled && step.reason ? <span>{step.reason}</span> : null}
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+      <aside className="access-summary">
+        <h3>当前状态</h3>
+        <div><span>当前模式</span><strong>正式 Live</strong></div>
+        <div><span>写入状态</span><strong>关闭</strong></div>
+        <div><span>紧急只读</span><strong>开启</strong></div>
+        <div><span>广告账户</span><strong>未连接</strong></div>
+        <div><span>最近同步</span><strong>无</strong></div>
+      </aside>
+    </section>
+  );
+}
+
+export function DisabledReason({ children }: { children: ReactNode }) {
+  return <small className="disabled-reason">{children}</small>;
 }
 
 export function PageHeader({

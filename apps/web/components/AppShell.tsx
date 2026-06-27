@@ -59,7 +59,7 @@ export function AppShell({
 
   const cycleAccount = () => {
     if (accounts.length === 0) {
-      onToast("尚未连接真实广告账户，请先完成 Meta 授权。", "warning");
+      onToast("尚未连接 Meta 广告账户，请先配置 Meta App 并完成授权。", "warning");
       return;
     }
     const next = cycleContextAccount();
@@ -83,7 +83,7 @@ export function AppShell({
     }
     setSyncLabel("正在刷新");
     touchDemoData();
-    onToast(demoSandbox ? "演示沙箱数据已刷新。" : "已创建手动刷新任务，页面会保留当前数据。", "success");
+    onToast(demoSandbox ? "演示沙箱数据已刷新。" : "已提交刷新请求。未连接 Meta 时不会生成演示数据。", "success");
     window.setTimeout(() => setSyncLabel("刚刚刷新"), 700);
   };
 
@@ -135,10 +135,10 @@ export function AppShell({
           <div className="connection-card">
             <div className="connection-row">
               <StatusDot tone={connection.state === "unconfigured" ? "danger" : connection.canWrite ? "success" : "warning"} />
-              <strong>{connection.stateLabel}</strong>
+              <strong>{demoSandbox ? "演示沙箱" : "正式模式"}</strong>
             </div>
             <div className="connection-meta">{connection.sourceLabel}</div>
-            <div className="connection-meta">{connection.canWrite ? "写入已授权" : "只读 / 写入关闭"}</div>
+            <div className="connection-meta">{demoSandbox ? "写入仅保存到本地演示记录" : connection.canWrite ? "写入已授权" : "只读 / 写入关闭"}</div>
           </div>
           <div className="unofficial">独立产品 · 非 Meta 官方工具</div>
         </div>
@@ -150,7 +150,7 @@ export function AppShell({
             <span className="account-logo">{account.name === "未连接广告账户" ? "M" : account.name.slice(0, 1)}</span>
             <span className="account-copy">
               <strong>{account.name}</strong>
-              <small>{account.maskedId} · {account.currency} · {account.timezone}</small>
+              <small>{account.id === "live_unconfigured" ? "请选择 Meta 广告账户" : `${account.maskedId} · ${account.currency} · ${account.timezone}`}</small>
             </span>
             <ChevronDown size={14} />
           </button>
@@ -159,7 +159,7 @@ export function AppShell({
             {dateRange} <ChevronDown size={13} />
           </button>
           <button className="top-control" type="button" onClick={cycleCompare}>对比：{compareRange}</button>
-          <button className="icon-control" type="button" aria-label="刷新同步" onClick={refresh}>
+          <button className="icon-control" type="button" aria-label="刷新状态" title="刷新状态" onClick={refresh}>
             <RefreshCcw size={15} />
           </button>
           <div className="sync-state"><StatusDot tone={syncLabel === "正在刷新" ? "info" : "success"} />{syncLabel}</div>
@@ -171,10 +171,10 @@ export function AppShell({
           </div>
           <div className="topbar-menu-wrap">
             <button className="user-menu" type="button" onClick={() => setUserOpen((open) => !open)}>
-              <span>用户</span>
+              <span>账户</span>
               <ChevronDown size={13} />
             </button>
-            {userOpen ? <div className="topbar-menu user"><strong>当前用户 · 操作者</strong><span>{connection.sourceLabel}</span><button type="button" onClick={() => router.push("/settings/members")}>成员设置</button><button type="button" onClick={() => void logout()}>退出登录</button></div> : null}
+            {userOpen ? <div className="topbar-menu user"><strong>当前账户</strong><span>{connection.sourceLabel}</span><button type="button" onClick={() => router.push("/settings/members")}>成员设置</button><button type="button" onClick={() => void logout()}>退出登录</button></div> : null}
           </div>
         </header>
         <DataSourceBanner connection={connection} />

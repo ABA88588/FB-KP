@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { DataState } from "@adflow/shared";
 import { rowsToCsv } from "@adflow/shared";
 import type { ToastKind } from "@/lib/app-types";
-import { Button, DataSourceGate, LiveEmptyState, PageHeader, StateGate } from "@/components/ui";
+import { Button, DataSourceGate, DisabledReason, LiveEmptyState, PageHeader, StateGate } from "@/components/ui";
 import { useDemoContext, type CompareRange } from "@/lib/demo-context";
 import { useAppRuntime } from "@/lib/app-runtime";
 
@@ -53,16 +53,16 @@ const metricLabels: Record<MetricKey, string> = {
 };
 
 const breakdownLabels: Record<BreakdownKey, string> = {
-  publisher_platform: "Publisher platform",
-  device_platform: "Device platform",
-  country: "Country"
+  publisher_platform: "发布平台",
+  device_platform: "设备平台",
+  country: "国家/地区"
 };
 
 const metricOptions = Object.keys(metricLabels) as MetricKey[];
 const breakdownOptions = Object.keys(breakdownLabels) as BreakdownKey[];
 
 const baseConfig: ReportConfig = {
-  account: "Seoul Beauty KR",
+  account: "首尔美妆演示账户",
   currency: "KRW",
   level: "Ad",
   dateRange: "近 30 天",
@@ -261,10 +261,13 @@ export function ReportsPage({
         <LiveEmptyState
           title="暂无真实 Insights 数据"
           detail="同步 Insights 后可按层级、日期、指标和 Breakdown 创建报表。生产 Live 模式不会生成模拟报表。"
+          requirements={<DisabledReason>{connection.state === "unconfigured" ? "需要先配置 Meta App" : "需要先连接 Meta 账号并同步 Insights"}</DisabledReason>}
           actions={
             <>
-              <Button variant="primary" disabled={!connection.canRead} onClick={() => showToast(connection.canRead ? "已提交同步 Insights 任务。" : connection.stateDetail, connection.canRead ? "success" : "warning")}>同步 Insights</Button>
+              <Button variant="primary" disabled={!connection.canRead} title={!connection.canRead ? "请先配置 Meta App 并完成 Meta 授权" : undefined} onClick={() => showToast(connection.canRead ? "已提交同步 Insights 任务。" : connection.stateDetail, connection.canRead ? "success" : "warning")}>同步 Insights</Button>
+              <Button onClick={() => window.location.assign("/ads/settings/meta-app")}>配置 Meta App</Button>
               <Button onClick={() => setPresetPanelOpen(true)}>配置报表</Button>
+              <Button variant="ghost" onClick={() => window.location.assign("/ads/demo/reports")}>查看演示沙箱</Button>
             </>
           }
         />
@@ -373,7 +376,7 @@ function buildReportRows(config: ReportConfig): ReportRow[] {
   const groups = breakdownGroups(config.breakdowns);
   const levelFactor = config.level === "Campaign" ? 1.32 : config.level === "Ad Set" ? 1.12 : 1;
   const filterFactor = config.filter === "ROAS 小于 1.5" ? 0.58 : config.filter === "花费大于 100000" ? 1.24 : 1;
-  const accountFactor = config.account === "Glow US DTC" ? 0.73 : 1;
+  const accountFactor = config.account === "Glow 美国演示账户" ? 0.73 : 1;
   const attributionFactor = config.attribution === "7-day click" ? 0.94 : config.attribution === "1-day click" ? 0.82 : 1;
   const compareFactor = config.compareRange === "去年同期" ? 1.16 : config.compareRange === "不对比" ? 0.97 : 1;
   return Array.from({ length: dayCount }, (_, dayIndex) => groups.map((group, groupIndex) => {

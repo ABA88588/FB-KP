@@ -114,7 +114,7 @@ export function createLiveAdapter(snapshot: LiveSnapshot | null): ClientApiAdapt
   const data: LiveSnapshot = snapshot ?? { accounts: [], entities: [], creatives: [], reportRows: [], syncJobs: [] };
   return {
   mode: "live",
-  sourceLabel: "Live Meta",
+  sourceLabel: "正式 Meta",
   listAdAccounts: () => data.accounts,
   getKpis: () => liveKpis(data.reportRows),
   listEntities: (level, accountId, query = "") => data.entities.filter((entity) => entity.level === level && entity.accountId === accountId && entity.name.toLowerCase().includes(query.toLowerCase())),
@@ -198,7 +198,7 @@ export function getClientApiConnection(mode: ClientDataMode): ClientApiConnectio
       canWrite: true,
       missingItems: [],
       stateLabel: "演示沙箱",
-      stateDetail: "所有数据均为模拟，不会连接 Meta，也不会写入真实广告对象。",
+      stateDetail: "所有数据均为模拟，不会连接 Meta，也不会写入真实广告账户。",
       writeBlockedReason: ""
     };
   }
@@ -208,13 +208,13 @@ export function getClientApiConnection(mode: ClientDataMode): ClientApiConnectio
     return {
       mode,
       state: "unconfigured",
-      sourceLabel: "Live Meta",
+      sourceLabel: "正式 Meta",
       canRead: false,
       canWrite: false,
       missingItems,
-      stateLabel: "未连接 Meta",
-      stateDetail: "尚未连接 Meta，请先配置 Meta App 并完成授权。",
-      writeBlockedReason: "尚未完成 Meta App 配置和账号授权，不能写入真实 Meta 对象。"
+      stateLabel: "未配置 Meta App",
+      stateDetail: "尚未配置 Meta App。请先填写 App ID 和 App Secret。",
+      writeBlockedReason: "请先配置 Meta App，并完成 Meta 授权。"
     };
   }
 
@@ -222,13 +222,13 @@ export function getClientApiConnection(mode: ClientDataMode): ClientApiConnectio
     return {
       mode,
       state: "readonly",
-      sourceLabel: "Live Meta",
+      sourceLabel: "正式 Meta",
       canRead: true,
       canWrite: false,
       missingItems,
-      stateLabel: "实时只读",
-      stateDetail: "当前账号允许读取真实 Meta 数据，但写入控制仍处于只读状态。",
-      writeBlockedReason: "当前 Live 连接为只读状态。"
+      stateLabel: "正式只读",
+      stateDetail: "Meta 账号已连接，当前仍处于只读保护状态。",
+      writeBlockedReason: "当前为紧急只读或账户只读，写入已被阻止。"
     };
   }
 
@@ -236,25 +236,25 @@ export function getClientApiConnection(mode: ClientDataMode): ClientApiConnectio
     return {
       mode,
       state: "write-disabled",
-      sourceLabel: "Live Meta",
+      sourceLabel: "正式 Meta",
       canRead: true,
       canWrite: false,
       missingItems,
       stateLabel: "写入关闭",
-      stateDetail: "实时读取可用，但真实 Meta 写入未开启或尚未完成客户端写入验收。",
-      writeBlockedReason: "需要同时开启 ENABLE_META_WRITES 并完成客户端写入验收。"
+      stateDetail: "Meta 账号已连接，请同步广告账户数据；真实写入仍保持关闭。",
+      writeBlockedReason: "写入总开关未开启，或当前广告账户不在 allowlist。"
     };
   }
 
   return {
     mode,
     state: "live-ready",
-    sourceLabel: "Live Meta",
+    sourceLabel: "正式 Meta",
     canRead: true,
     canWrite: true,
     missingItems,
-    stateLabel: "实时模式",
-    stateDetail: "当前页面读取数据库中的真实 Meta 数据，不使用演示数据。",
+    stateLabel: "已连接",
+    stateDetail: "Meta 已连接，数据已更新。",
     writeBlockedReason: ""
   };
 }
@@ -264,8 +264,8 @@ export function getMissingMetaRequirements(): MissingMetaRequirement[] {
   if (!isEnabled(clientEnv.metaConfigured)) {
     missing.push({
       id: "server-meta-credentials",
-      label: "Meta App 配置",
-      detail: "需要配置 App ID、App Secret 和 OAuth Redirect URI。"
+      label: "Meta App 未配置",
+      detail: "需要填写 App ID、App Secret 和 OAuth 回调地址。"
     });
   }
   return missing;

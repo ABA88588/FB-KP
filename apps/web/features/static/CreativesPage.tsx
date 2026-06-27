@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Upload } from "lucide-react";
 import type { CreativeAsset } from "@adflow/meta-client";
 import type { ToastKind } from "@/lib/app-types";
-import { Button, DataSourceGate, LiveEmptyState, PageHeader } from "@/components/ui";
+import { Button, DataSourceGate, DisabledReason, LiveEmptyState, PageHeader } from "@/components/ui";
 import { useAppRuntime } from "@/lib/app-runtime";
 import { useDemoContext } from "@/lib/demo-context";
 import { writeBlockedMessage } from "@/lib/client-api-adapter";
@@ -84,10 +84,12 @@ export function CreativesPage({ showToast: providedShowToast }: { showToast?: (t
         <LiveEmptyState
           title="暂无真实素材"
           detail="同步后将展示 Meta Creative、图片、视频和使用情况。未连接或写入关闭时，上传素材不可用。"
+          requirements={<DisabledReason>{connection.canWrite ? "可以上传素材" : connection.canRead ? "写入当前关闭" : "需要先配置 Meta App 并连接 Meta 账号"}</DisabledReason>}
           actions={
             <>
-              <Button variant="primary" disabled={!connection.canRead} onClick={() => showToast(connection.canRead ? "已提交同步素材任务。" : connection.stateDetail, connection.canRead ? "success" : "warning")}>同步素材</Button>
-              <Button disabled={!connection.canWrite} onClick={uploadDemoAsset}>上传素材</Button>
+              <Button variant="primary" disabled={!connection.canRead} title={!connection.canRead ? "请先完成 Meta 授权" : undefined} onClick={() => showToast(connection.canRead ? "已提交同步素材任务。" : connection.stateDetail, connection.canRead ? "success" : "warning")}>同步素材</Button>
+              <Button disabled={!connection.canWrite} title={!connection.canWrite ? "写入当前关闭" : undefined} onClick={uploadDemoAsset}>上传素材</Button>
+              <Button variant="ghost" onClick={() => window.location.assign("/ads/demo/creatives")}>查看演示沙箱</Button>
             </>
           }
         />

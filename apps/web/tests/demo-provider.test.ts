@@ -12,24 +12,24 @@ afterEach(() => {
 describe("DemoMetaAdsProvider", () => {
   it("filters entities by name or Meta ID", () => {
     const provider = new DemoMetaAdsProvider();
-    const rows = provider.listEntities("campaign", krAccountId, "summer");
+    const rows = provider.listEntities("campaign", krAccountId, "夏季");
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.name).toContain("Summer Glow");
+    expect(rows[0]?.name).toContain("夏季焕亮");
   });
 
   it("updates status only in local demo data", () => {
     const provider = new DemoMetaAdsProvider();
-    const [row] = provider.listEntities("campaign", krAccountId, "Summer Glow");
+    const [row] = provider.listEntities("campaign", krAccountId, "夏季焕亮");
     expect(row?.status).toBe("active");
     provider.updateStatus("campaign", krAccountId, [row?.id ?? ""], "paused");
-    expect(provider.listEntities("campaign", krAccountId, "Summer Glow")[0]?.status).toBe("paused");
+    expect(provider.listEntities("campaign", krAccountId, "夏季焕亮")[0]?.status).toBe("paused");
   });
 
   it("updates budgets and duplicates rows in demo data", () => {
     const provider = new DemoMetaAdsProvider();
-    const [row] = provider.listEntities("campaign", krAccountId, "Summer Glow");
+    const [row] = provider.listEntities("campaign", krAccountId, "夏季焕亮");
     provider.updateBudget("campaign", krAccountId, [row?.id ?? ""], 300000);
-    expect(provider.listEntities("campaign", krAccountId, "Summer Glow")[0]?.budget).toBe("₩300,000 / 日");
+    expect(provider.listEntities("campaign", krAccountId, "夏季焕亮")[0]?.budget).toBe("₩300,000 / 日");
 
     const copies = provider.duplicateEntities("campaign", krAccountId, [row?.id ?? ""]);
     expect(copies).toHaveLength(1);
@@ -48,15 +48,15 @@ describe("DemoMetaAdsProvider", () => {
 
   it("isolates mutable entities and creatives by account", () => {
     const provider = new DemoMetaAdsProvider();
-    const [krRow] = provider.listEntities("campaign", krAccountId, "Summer Glow");
+    const [krRow] = provider.listEntities("campaign", krAccountId, "夏季焕亮");
     provider.updateBudget("campaign", usAccountId, [krRow?.id ?? ""], 999);
-    expect(provider.listEntities("campaign", krAccountId, "Summer Glow")[0]?.budget).not.toBe("$999 / 日");
+    expect(provider.listEntities("campaign", krAccountId, "夏季焕亮")[0]?.budget).not.toBe("$999 / 日");
 
     const ids = provider.createAdBundle(usAccountId, {
       campaignName: "US Demo Campaign",
-      objective: "Sales",
+      objective: "销售",
       budget: "120",
-      audience: "US Broad",
+      audience: "美国广泛受众",
       event: "Purchase",
       title: "US Demo Creative",
       assetFile: "us_demo.jpg"
@@ -70,13 +70,13 @@ describe("DemoMetaAdsProvider", () => {
   it("keeps simulated mutations fully local without network calls", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(() => Promise.reject(new Error("network disabled")));
     const provider = new DemoMetaAdsProvider();
-    const [row] = provider.listEntities("campaign", krAccountId, "Summer Glow");
+    const [row] = provider.listEntities("campaign", krAccountId, "夏季焕亮");
 
     provider.updateStatus("campaign", krAccountId, [row?.id ?? ""], "paused");
     provider.updateBudget("campaign", krAccountId, [row?.id ?? ""], 123000);
     provider.createAdBundle(krAccountId, {
       campaignName: "Local Only Campaign",
-      objective: "Sales",
+      objective: "销售",
       budget: "100000",
       audience: "Controlled Mock Audience",
       event: "Purchase",

@@ -55,7 +55,7 @@ const storageKeyByMode: Record<ClientDataMode, string> = {
 
 const fallbackAccount: AdAccount = {
   id: "act_demo",
-  name: "Seoul Beauty KR",
+  name: "首尔美妆演示账户",
   maskedId: "act_••••8291",
   currency: "KRW",
   timezone: "Asia/Seoul",
@@ -65,9 +65,9 @@ const fallbackAccount: AdAccount = {
 const liveFallbackAccount: AdAccount = {
   id: "live_unconfigured",
   name: "未连接广告账户",
-  maskedId: "请先连接 Meta",
+  maskedId: "请选择 Meta 广告账户",
   currency: "USD",
-  timezone: "待配置",
+  timezone: "",
   status: "permission-denied"
 };
 

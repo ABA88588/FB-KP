@@ -6,7 +6,7 @@ import { useState } from "react";
 import type { DataState } from "@adflow/shared";
 import type { CampaignEntity } from "@adflow/meta-client";
 import type { ToastKind } from "@/lib/app-types";
-import { Button, DataSourceGate, HealthPanel, KpiCard, LiveEmptyState, PageHeader, StateGate, StatusDot, TrendChart } from "@/components/ui";
+import { AccessGuidePanel, Button, DataSourceGate, HealthPanel, KpiCard, PageHeader, StateGate, StatusDot, TrendChart } from "@/components/ui";
 import { useDemoContext } from "@/lib/demo-context";
 import { useAppRuntime } from "@/lib/app-runtime";
 
@@ -49,24 +49,14 @@ export function OverviewPage({
         description={connection.mode === "live" && !hasLiveData ? "等待 Meta App 配置、账号授权和首次同步" : `${dateLabel} · ${snapshotSavedAt ? `快照保存于 ${snapshotSavedAt}` : "报表更新于 6 分钟前"}`}
         actions={
           <>
-            <Button disabled={!hasLiveData} onClick={saveSnapshot}>保存快照</Button>
-            <Button disabled={!connection.canWrite} variant="primary" onClick={() => router.push(`${routePrefix}/campaigns/new?step=1`)}>+ 新建广告</Button>
+            <Button disabled={!hasLiveData} title={!hasLiveData ? "需要先连接 Meta 并同步真实数据" : undefined} onClick={saveSnapshot}>保存快照</Button>
+            <Button disabled={!connection.canWrite} title={!connection.canWrite ? "写入总开关未开启，或当前为紧急只读" : undefined} variant="primary" onClick={() => router.push(`${routePrefix}/campaigns/new?step=1`)}>+ 新建广告</Button>
           </>
         }
       />
 
       {!hasLiveData ? (
-        <LiveEmptyState
-          title="尚未连接 Meta 广告账户"
-          detail="配置 Meta App 并授权账号后，将显示真实花费、ROAS、转化、曝光和账户健康。"
-          actions={
-            <>
-              <Button variant="primary" onClick={() => router.push("/settings/meta-app")}>配置 Meta App</Button>
-              <Button onClick={() => router.push("/settings/connections")}>连接 Meta 账号</Button>
-              <Button variant="ghost" onClick={() => router.push("/demo/overview")}>查看演示沙箱</Button>
-            </>
-          }
-        />
+        <AccessGuidePanel connection={connection} />
       ) : (
         <>
       <div className="metric-grid">

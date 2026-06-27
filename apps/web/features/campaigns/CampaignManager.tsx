@@ -9,7 +9,7 @@ import type { CampaignEntity, EntityLevel } from "@adflow/meta-client";
 import type { ToastKind } from "@/lib/app-types";
 import { useDemoContext } from "@/lib/demo-context";
 import { useAppRuntime } from "@/lib/app-runtime";
-import { Button, ConfirmDialog, DataSourceGate, LiveEmptyState, PageHeader, StateGate, StatusBadge } from "@/components/ui";
+import { Button, ConfirmDialog, DataSourceGate, DisabledReason, LiveEmptyState, PageHeader, StateGate, StatusBadge } from "@/components/ui";
 import { writeBlockedMessage } from "@/lib/client-api-adapter";
 import { DetailDrawer } from "./DetailDrawer";
 
@@ -339,8 +339,8 @@ export function CampaignManager({
         description={connection.mode === "live" && !hasLiveObjects ? "等待连接 Meta 广告账户并同步广告对象" : "对象更新于 8 分钟前 · Insights 更新于 6 分钟前"}
         actions={
           <>
-            <Button disabled={!connection.canWrite} onClick={() => router.push(`${routePrefix}/campaigns/new?step=1&source=import`)}>导入草稿</Button>
-            <Button disabled={!connection.canWrite} variant="primary" onClick={() => router.push(`${routePrefix}/campaigns/new?step=1`)}><Plus size={14} /> 新建广告</Button>
+            <Button disabled={!connection.canWrite} title={!connection.canWrite ? "请先配置 Meta App、完成授权并通过写入守卫" : undefined} onClick={() => router.push(`${routePrefix}/campaigns/new?step=1&source=import`)}>导入草稿</Button>
+            <Button disabled={!connection.canWrite} title={!connection.canWrite ? "当前为只读 / 写入关闭" : undefined} variant={connection.canWrite ? "primary" : "secondary"} onClick={() => router.push(`${routePrefix}/campaigns/new?step=1`)}><Plus size={14} /> 新建广告</Button>
           </>
         }
       />
@@ -349,9 +349,11 @@ export function CampaignManager({
         <LiveEmptyState
           title="暂无真实广告对象"
           detail="连接 Meta 广告账户后，可同步广告系列、广告组和广告。生产 Live 模式不会显示演示广告。"
+          requirements={<DisabledReason>{connection.state === "unconfigured" ? "需要先配置 Meta App" : "需要先连接 Meta 账号并选择广告账户"}</DisabledReason>}
           actions={
             <>
-              <Button variant="primary" disabled={!connection.canRead} onClick={() => showToast(connection.canRead ? "已提交同步广告对象任务。" : connection.stateDetail, connection.canRead ? "success" : "warning")}>立即同步广告对象</Button>
+              <Button onClick={() => router.push("/settings/connections")}>连接 Meta 账号</Button>
+              <Button variant="primary" disabled={!connection.canRead} title={!connection.canRead ? "请先配置 Meta App 并完成 Meta 授权" : undefined} onClick={() => showToast(connection.canRead ? "已提交同步广告对象任务。" : connection.stateDetail, connection.canRead ? "success" : "warning")}>同步广告对象</Button>
               <Button variant="ghost" onClick={() => router.push("/demo/campaigns?level=campaign")}>查看演示沙箱</Button>
             </>
           }

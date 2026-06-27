@@ -8,7 +8,7 @@ import type { SyncJob } from "@adflow/meta-client";
 import type { ToastKind } from "@/lib/app-types";
 import { useDemoContext } from "@/lib/demo-context";
 import { useAppRuntime } from "@/lib/app-runtime";
-import { Button, DataSourceGate, LiveEmptyState, PageHeader, StateGate, StatusDot } from "@/components/ui";
+import { Button, DataSourceGate, DisabledReason, LiveEmptyState, PageHeader, StateGate, StatusDot } from "@/components/ui";
 import { apiPath } from "@/lib/app-paths";
 
 const tabs = ["同步任务", "API 错误", "数据新鲜度", "审计日志"] as const;
@@ -99,7 +99,13 @@ export function SyncCenterPage({
         <LiveEmptyState
           title="暂无同步任务"
           detail="连接 Meta 后，这里会显示同步进度、API 错误、fbtrace_id 和审计日志。生产 Live 模式不会显示演示失败任务。"
-          actions={<Button variant="primary" onClick={() => window.location.assign("/ads/settings/connections")}>连接 Meta 账号</Button>}
+          requirements={<DisabledReason>{connection.state === "unconfigured" ? "需要先配置 Meta App" : "需要先连接 Meta 账号"}</DisabledReason>}
+          actions={
+            <>
+              <Button variant="primary" disabled={connection.state === "unconfigured"} title={connection.state === "unconfigured" ? "请先配置 Meta App" : undefined} onClick={() => window.location.assign("/ads/settings/connections")}>连接 Meta 账号</Button>
+              <Button onClick={() => window.location.assign("/ads/settings/meta-app")}>配置 Meta App</Button>
+            </>
+          }
         />
       ) : (
         <>
