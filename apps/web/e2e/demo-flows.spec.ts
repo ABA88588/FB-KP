@@ -190,11 +190,12 @@ test.describe("production live mode", () => {
     }, savedBodies);
 
     await page.goto("/ads/settings/meta-app");
-    await expect(page.getByRole("button", { name: "测试配置" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "测试配置" })).toBeDisabled();
     await page.getByLabel("Graph API 版本").fill("25.0");
     await page.getByRole("button", { name: "保存配置" }).click();
 
     await expect(page.getByText("配置已保存。应用密钥已加密写入数据库，前端不会回显明文。")).toBeVisible();
+    await expect(page.getByRole("button", { name: "测试配置" })).toBeEnabled();
     expect(savedBodies).toHaveLength(1);
     expect(savedBodies[0]?.graphApiVersion).toBe("v25.0");
     expect(savedBodies[0]).not.toHaveProperty("metaAppSecret");

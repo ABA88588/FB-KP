@@ -35,11 +35,13 @@ export function MetaAppSettingsPage() {
   const [testing, setTesting] = useState(false);
   const [message, setMessage] = useState("");
   const [formError, setFormError] = useState("");
+  const [savedInSession, setSavedInSession] = useState(false);
 
   const load = async () => {
     setLoading(true);
     setMessage("");
     setFormError("");
+    setSavedInSession(false);
     const response = await fetch(apiPath("/api/settings/meta-app"), { cache: "no-store" });
     const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; data?: MetaAppStatus; error?: string };
     setLoading(false);
@@ -51,6 +53,10 @@ export function MetaAppSettingsPage() {
     setMetaAppId(payload.data.metaAppId);
     setGraphApiVersion(payload.data.graphApiVersion);
     setOauthRedirectUri(payload.data.oauthRedirectUri);
+  };
+
+  const markDirty = () => {
+    setSavedInSession(false);
   };
 
   useEffect(() => {
@@ -99,6 +105,7 @@ export function MetaAppSettingsPage() {
     setMetaAppId(payload.data.metaAppId);
     setGraphApiVersion(payload.data.graphApiVersion);
     setOauthRedirectUri(payload.data.oauthRedirectUri);
+    setSavedInSession(true);
     setMessage("配置已保存。应用密钥已加密写入数据库，前端不会回显明文。");
     showToast("Meta App 配置已保存", "success");
   };
@@ -167,15 +174,15 @@ export function MetaAppSettingsPage() {
             <div className="panel-header"><div><h2>配置表单</h2><p>应用密钥只允许输入，不会从服务端回显。</p></div></div>
             <label>
               <span>Meta App ID</span>
-              <input value={metaAppId} onChange={(event) => setMetaAppId(event.target.value)} placeholder="输入 Meta App ID" required />
+              <input value={metaAppId} onChange={(event) => { setMetaAppId(event.target.value); markDirty(); }} placeholder="输入 Meta App ID" required />
             </label>
             <label>
               <span>Meta App Secret</span>
-              <input type="password" value={metaAppSecret} onChange={(event) => setMetaAppSecret(event.target.value)} placeholder={status?.secretConfigured ? "保持现有应用密钥不变" : "输入应用密钥"} />
+              <input type="password" value={metaAppSecret} onChange={(event) => { setMetaAppSecret(event.target.value); markDirty(); }} placeholder={status?.secretConfigured ? "保持现有应用密钥不变" : "输入应用密钥"} />
             </label>
             <label>
               <span>Graph API 版本</span>
-              <input value={graphApiVersion} onChange={(event) => { setGraphApiVersion(event.target.value); setFormError(""); }} required />
+              <input value={graphApiVersion} onChange={(event) => { setGraphApiVersion(event.target.value); setFormError(""); markDirty(); }} required />
             </label>
             <label>
               <span>OAuth 回调地址</span>
@@ -188,7 +195,7 @@ export function MetaAppSettingsPage() {
             {message ? <div className={message.includes("失败") ? "form-error" : "state-notice success"}>{message}</div> : null}
             <div className="connection-actions">
               <Button variant="primary" type="submit" disabled={saving}>{saving ? "保存中..." : "保存配置"}</Button>
-              <Button type="button" onClick={() => void testConfig()} disabled={testing || !status?.configured}>{testing ? "测试中..." : "测试配置"}</Button>
+              <Button type="button" onClick={() => void testConfig()} disabled={testing || !status?.configured || !savedInSession}>{testing ? "测试中..." : "测试配置"}</Button>
               <Button type="button" onClick={() => void copyRedirectUri()}>复制回调地址</Button>
             </div>
           </form>
