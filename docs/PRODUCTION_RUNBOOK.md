@@ -1,7 +1,7 @@
 # Production Runbook
 
 Current deployment host: `89.208.252.84`
-Current deployment URL: `http://89.208.252.84`
+Current deployment URL: `http://89.208.252.84/ads/login`
 Deployment directory: `/opt/adflow`
 
 ## Safety Rules
@@ -12,6 +12,7 @@ Deployment directory: `/opt/adflow`
 - Do not modify unrelated services on the server.
 - Do not enable real Meta writes until Meta credentials, test ad account IDs, and allowlist approval are complete.
 - Keep `COMPOSE_PARALLEL_LIMIT=1` for on-host image builds on this 1 GiB RAM server.
+- Keep application traffic under `/ads`; do not add root-level application routes.
 
 ## Status
 
@@ -32,12 +33,28 @@ Expected services:
 
 ```bash
 cd /opt/adflow
-curl -fsS http://127.0.0.1/api/health/live
-curl -fsS http://127.0.0.1/api/health || true
+curl -fsS http://127.0.0.1/ads/api/health/live
+curl -fsS http://127.0.0.1/ads/api/health || true
 bash deploy/healthcheck.sh
 ```
 
-`/api/health` should report JSON `status: ok` when PostgreSQL, Redis, worker heartbeat, demo/live mode, and write gates are healthy. The worker heartbeat is shared through the `worker-heartbeat` Docker volume.
+`/ads/api/health` should report JSON `status: ok` when PostgreSQL, Redis, worker heartbeat, demo/live mode, and write gates are healthy. The worker heartbeat is shared through the `worker-heartbeat` Docker volume.
+
+## Public Routes
+
+- `http://89.208.252.84/ads/login`: production console login.
+- `http://89.208.252.84/ads/overview`: overview.
+- `http://89.208.252.84/ads/campaigns`: campaign manager.
+- `http://89.208.252.84/ads/campaigns/new`: create campaign wizard.
+- `http://89.208.252.84/ads/reports`: reports.
+- `http://89.208.252.84/ads/sync-center`: sync center.
+- `http://89.208.252.84/ads/creatives`: creative center.
+- `http://89.208.252.84/ads/settings`: settings.
+- `http://89.208.252.84/ads/settings/meta-app`: Meta App configuration.
+- `http://89.208.252.84/ads/settings/connections`: Meta account connections.
+- `http://89.208.252.84/ads/settings/write-controls`: Live write controls.
+
+Legacy `/`, `/login`, `/overview`, `/campaigns`, `/reports`, `/sync-center`, `/creatives`, and `/settings` redirect to `/ads/*`.
 
 ## Logs
 
@@ -69,6 +86,15 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d postg
 docker compose -f docker-compose.prod.yml --env-file .env.production run --rm migrate
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d web worker reverse-proxy
 bash deploy/healthcheck.sh
+```
+
+Expected `.env.production` base-path values:
+
+```bash
+APP_BASE_URL=http://89.208.252.84
+APP_BASE_PATH=/ads
+NEXT_PUBLIC_BASE_PATH=/ads
+META_OAUTH_REDIRECT_URI=http://89.208.252.84/ads/api/meta/oauth/callback
 ```
 
 ## Backup
@@ -105,6 +131,7 @@ bash deploy/rollback.sh
 - Public ports 3000, 5432, and 6379 must remain closed.
 - PostgreSQL and Redis are only reachable inside Docker networks.
 - Worker exposes no public port.
+- Existing non-AdFlow services, including the host `hysteria` UDP listener, must not be modified by AdFlow deployment work.
 
 ## External Inputs Required
 

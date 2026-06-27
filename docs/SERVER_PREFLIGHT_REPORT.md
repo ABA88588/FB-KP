@@ -1,9 +1,18 @@
 # Server Preflight Report
 
-Date: 2026-06-26
+Date: 2026-06-27
 Host: 89.208.252.84
 User used for preflight/deploy: root
 Report status: completed on the target server
+
+## Current Deployment State
+
+- Deployment directory: `/opt/adflow`.
+- Application base path: `/ads`.
+- Public entrypoint: `http://89.208.252.84/ads/login`.
+- Root path `/` redirects to `/ads/login`.
+- Legacy paths `/login`, `/overview`, `/campaigns`, `/reports`, `/sync-center`, `/creatives`, and `/settings` redirect to their `/ads/*` equivalents.
+- Health checks use `/ads/api/health/live`.
 
 ## Read-Only Preflight
 
@@ -53,6 +62,7 @@ ls -la /opt || true
 - Public port 5432: not exposed.
 - Public port 6379: not exposed.
 - SSH port 22: open.
+- Existing UDP `hysteria` listener remains present and was not modified.
 
 ## Secrets
 
