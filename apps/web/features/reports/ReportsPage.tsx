@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { DataState } from "@adflow/shared";
 import { rowsToCsv } from "@adflow/shared";
 import type { ToastKind } from "@/lib/app-types";
-import { Button, PageHeader, StateGate } from "@/components/ui";
+import { Button, DataSourceGate, DisabledReason, LiveEmptyState, PageHeader, StateGate } from "@/components/ui";
 import { useDemoContext, type CompareRange } from "@/lib/demo-context";
 import { useAppRuntime } from "@/lib/app-runtime";
 
@@ -53,16 +53,16 @@ const metricLabels: Record<MetricKey, string> = {
 };
 
 const breakdownLabels: Record<BreakdownKey, string> = {
-  publisher_platform: "Publisher platform",
-  device_platform: "Device platform",
-  country: "Country"
+  publisher_platform: "发布平台",
+  device_platform: "设备平台",
+  country: "国家/地区"
 };
 
 const metricOptions = Object.keys(metricLabels) as MetricKey[];
 const breakdownOptions = Object.keys(breakdownLabels) as BreakdownKey[];
 
 const baseConfig: ReportConfig = {
-  account: "Seoul Beauty KR",
+  account: "首尔美妆演示账户",
   currency: "KRW",
   level: "Ad",
   dateRange: "近 30 天",
@@ -91,14 +91,14 @@ export function ReportsPage({
   const runtime = useAppRuntime();
   const dataState = providedDataState ?? runtime.dataState;
   const showToast = providedShowToast ?? runtime.showToast;
-  const { account, accountLabel, dateRange, compareRange } = useDemoContext();
+  const { connection, account, accountLabel, dateRange, compareRange } = useDemoContext();
   const [config, setConfig] = useState<ReportConfig>(baseConfig);
   const [presets, setPresets] = useState<Preset[]>(initialPresets);
   const [presetPanelOpen, setPresetPanelOpen] = useState(true);
   const [metricsOpen, setMetricsOpen] = useState(false);
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState(initialPresets[0]?.name ?? "近 30 天 Ad 平台效果");
-  const [rows, setRows] = useState<ReportRow[]>(() => buildReportRows(baseConfig));
+  const [rows, setRows] = useState<ReportRow[]>(() => connection.mode === "live" ? [] : buildReportRows(baseConfig));
   const [progress, setProgress] = useState(100);
   const [stage, setStage] = useState("异步报表已完成");
   const [note, setNote] = useState("640 行 · 生成于 2 分钟前");
@@ -107,8 +107,16 @@ export function ReportsPage({
   const resultColumns = useMemo(() => ["日期", activeBreakdownLabel, ...config.metrics.map((metric) => metricLabels[metric])], [activeBreakdownLabel, config.metrics]);
   const rowTemplate = `1fr 1.2fr repeat(${config.metrics.length}, 0.9fr)`;
   const chartMetric = config.metrics[0] ?? "spend";
+  const hasLiveRows = !(connection.mode === "live" && rows.length === 0);
 
   useEffect(() => {
+    if (connection.mode === "live") {
+      setRows([]);
+      setStage("等待真实 Insights");
+      setProgress(0);
+      setNote("实时模式不会生成演示报表行，请先同步真实 Insights。");
+      return;
+    }
     setConfig((current) => {
       const next = { ...current, account: account.name, currency: account.currency, dateRange, compareRange };
       if (
@@ -125,7 +133,7 @@ export function ReportsPage({
       setNote(`${next.account} · ${next.dateRange} · ${next.compareRange} · ${estimateSize(next)}`);
       return next;
     });
-  }, [account.currency, account.name, compareRange, dateRange]);
+  }, [account.currency, account.name, compareRange, connection.mode, dateRange]);
 
   const updateConfig = (patch: Partial<ReportConfig>) => {
     setConfig((current) => ({ ...current, ...patch }));
@@ -150,6 +158,14 @@ export function ReportsPage({
   };
 
   const runReport = () => {
+    if (connection.mode === "live") {
+      setRows([]);
+      setProgress(0);
+      setStage("等待真实 Insights");
+      setNote("请先在同步中心同步真实 Insights，再运行报表。");
+      showToast("暂无真实 Insights 数据，不能生成生产报表。", "warning");
+      return;
+    }
     if (config.metrics.length === 0) {
       showToast("至少选择 1 个指标", "warning");
       return;
@@ -201,6 +217,10 @@ export function ReportsPage({
   };
 
   const exportCsv = () => {
+    if (connection.mode === "live" && rows.length === 0) {
+      showToast("Live report adapter returned no rows to export.", "warning");
+      return;
+    }
     const csv = rowsToCsv([
       resultColumns,
       ...rows.map((row) => [
@@ -223,11 +243,12 @@ export function ReportsPage({
 
   return (
     <StateGate state={dataState}>
+      <DataSourceGate connection={connection}>
       <PageHeader
         className="report-header"
         eyebrow={accountLabel}
         title="自定义报表"
-        description="使用允许的指标和 Breakdown 构建报表"
+        description={connection.mode === "live" && !hasLiveRows ? "等待同步真实 Insights 后再生成报表" : "使用允许的指标和 Breakdown 构建报表"}
         actions={
           <>
             <Button onClick={() => setPresetPanelOpen((open) => !open)}>打开预设</Button>
@@ -236,6 +257,22 @@ export function ReportsPage({
         }
       />
 
+      {!hasLiveRows ? (
+        <LiveEmptyState
+          title="暂无真实 Insights 数据"
+          detail="同步 Insights 后可按层级、日期、指标和 Breakdown 创建报表。生产 Live 模式不会生成模拟报表。"
+          requirements={<DisabledReason>{connection.state === "unconfigured" ? "需要先配置 Meta App" : "需要先连接 Meta 账号并同步 Insights"}</DisabledReason>}
+          actions={
+            <>
+              <Button variant="primary" disabled={!connection.canRead} title={!connection.canRead ? "请先配置 Meta App 并完成 Meta 授权" : undefined} onClick={() => showToast(connection.canRead ? "已提交同步 Insights 任务。" : connection.stateDetail, connection.canRead ? "success" : "warning")}>同步 Insights</Button>
+              <Button onClick={() => window.location.assign("/ads/settings/meta-app")}>配置 Meta App</Button>
+              <Button onClick={() => setPresetPanelOpen(true)}>配置报表</Button>
+              <Button variant="ghost" onClick={() => window.location.assign("/ads/demo/reports")}>查看演示沙箱</Button>
+            </>
+          }
+        />
+      ) : (
+        <>
       <div className="report-layout three">
         <aside className="report-builder panel">
           <div className="builder-heading"><h2>查询配置</h2><span>{selectedPreset}</span></div>
@@ -327,6 +364,9 @@ export function ReportsPage({
           </aside>
         ) : null}
       </div>
+        </>
+      )}
+      </DataSourceGate>
     </StateGate>
   );
 }
@@ -336,7 +376,7 @@ function buildReportRows(config: ReportConfig): ReportRow[] {
   const groups = breakdownGroups(config.breakdowns);
   const levelFactor = config.level === "Campaign" ? 1.32 : config.level === "Ad Set" ? 1.12 : 1;
   const filterFactor = config.filter === "ROAS 小于 1.5" ? 0.58 : config.filter === "花费大于 100000" ? 1.24 : 1;
-  const accountFactor = config.account === "Glow US DTC" ? 0.73 : 1;
+  const accountFactor = config.account === "Glow 美国演示账户" ? 0.73 : 1;
   const attributionFactor = config.attribution === "7-day click" ? 0.94 : config.attribution === "1-day click" ? 0.82 : 1;
   const compareFactor = config.compareRange === "去年同期" ? 1.16 : config.compareRange === "不对比" ? 0.97 : 1;
   return Array.from({ length: dayCount }, (_, dayIndex) => groups.map((group, groupIndex) => {

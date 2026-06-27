@@ -3,7 +3,7 @@ import { AdFlowApp } from "@/components/AdFlowApp";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AdFlow Console",
+  title: "AdFlow 广告工作台",
   description: "Meta 广告管理演示工作台"
 };
 

@@ -4,11 +4,12 @@ import { RefreshCcw } from "lucide-react";
 import { useState } from "react";
 import type { DataState } from "@adflow/shared";
 import { cn } from "@adflow/shared";
-import { demoProvider, type SyncJob } from "@adflow/meta-client";
+import type { SyncJob } from "@adflow/meta-client";
 import type { ToastKind } from "@/lib/app-types";
 import { useDemoContext } from "@/lib/demo-context";
 import { useAppRuntime } from "@/lib/app-runtime";
-import { Button, PageHeader, StateGate, StatusDot } from "@/components/ui";
+import { Button, DataSourceGate, DisabledReason, LiveEmptyState, PageHeader, StateGate, StatusDot } from "@/components/ui";
+import { apiPath } from "@/lib/app-paths";
 
 const tabs = ["同步任务", "API 错误", "数据新鲜度", "审计日志"] as const;
 
@@ -22,12 +23,12 @@ export function SyncCenterPage({
   const runtime = useAppRuntime();
   const dataState = providedDataState ?? runtime.dataState;
   const showToast = providedShowToast ?? runtime.showToast;
-  const { account, accountLabel, dateLabel, touchDemoData } = useDemoContext();
+  const { api, connection, account, accountLabel, dateLabel, touchDemoData } = useDemoContext();
   const [tab, setTab] = useState<(typeof tabs)[number]>("同步任务");
   const [version, setVersion] = useState(0);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [checkedAt, setCheckedAt] = useState("刚刚");
-  const jobs = demoProvider.listSyncJobs(account.id);
+  const jobs = api.listSyncJobs(account.id);
   const errorJobs = jobs.filter((job) => Boolean(job.error));
   const visibleJobs = tab === "API 错误" ? errorJobs : jobs;
   const selectedJob = jobs.find((job) => job.id === selectedJobId) ?? null;
@@ -38,10 +39,24 @@ export function SyncCenterPage({
     queued: jobs.filter((job) => job.status === "queued").length,
     failed: jobs.filter((job) => job.status === "failed" || Boolean(job.error)).length
   };
+  const hasLiveJobs = !(connection.mode === "live" && jobs.length === 0);
   void version;
 
   const enqueueSync = () => {
-    const job = demoProvider.enqueueSyncJob(account.id);
+    if (!connection.canRead) {
+      showToast(connection.stateDetail, "warning");
+      return;
+    }
+    if (connection.mode === "live") {
+      void fetch(apiPath(`/api/ad-accounts/${encodeURIComponent(account.id)}/sync`), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ type: "sync-entities" })
+      });
+      showToast("已提交真实同步任务，Worker 任务写入数据库后会显示进度。", "success");
+      return;
+    }
+    const job = api.enqueueSyncJob(account.id);
     setTab("同步任务");
     setSelectedJobId(job.id);
     setVersion((current) => current + 1);
@@ -52,7 +67,7 @@ export function SyncCenterPage({
       { delay: 1800, progress: "100%", elapsed: "14s", status: "success" as const }
     ].forEach((step) => {
       window.setTimeout(() => {
-        demoProvider.updateSyncJob(account.id, job.id, step);
+        api.updateSyncJob(account.id, job.id, step);
         if ("status" in step && step.status === "success") touchDemoData();
         setVersion((current) => current + 1);
       }, step.delay);
@@ -62,23 +77,38 @@ export function SyncCenterPage({
   const checkConnection = () => {
     const checked = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
     setCheckedAt(checked);
-    showToast("连接检查已完成：Demo Provider 正常", "success");
+    showToast(connection.mode === "demo" ? "连接检查已完成：演示数据源正常" : connection.stateDetail, connection.canRead ? "success" : "warning");
   };
 
   return (
     <StateGate state={dataState}>
+      <DataSourceGate connection={connection}>
       <PageHeader
         eyebrow="系统状态"
-        title="同步与错误"
-        description={`${accountLabel} · ${dateLabel} · 最近检查 ${checkedAt}`}
+        title="同步中心"
+        description={connection.mode === "live" && !hasLiveJobs ? "等待 Meta 连接和真实 Worker 同步任务" : `${accountLabel} · ${dateLabel} · 最近检查 ${checkedAt}`}
         actions={
           <>
             <Button onClick={checkConnection}>重新检查连接</Button>
-            <Button variant="primary" onClick={enqueueSync}><RefreshCcw size={14} /> 立即同步</Button>
+            <Button disabled={!connection.canRead} variant="primary" onClick={enqueueSync}><RefreshCcw size={14} /> 立即同步</Button>
           </>
         }
       />
 
+      {!hasLiveJobs ? (
+        <LiveEmptyState
+          title="暂无同步任务"
+          detail="连接 Meta 后，这里会显示同步进度、API 错误、fbtrace_id 和审计日志。生产 Live 模式不会显示演示失败任务。"
+          requirements={<DisabledReason>{connection.state === "unconfigured" ? "需要先配置 Meta App" : "需要先连接 Meta 账号"}</DisabledReason>}
+          actions={
+            <>
+              <Button variant="primary" disabled={connection.state === "unconfigured"} title={connection.state === "unconfigured" ? "请先配置 Meta App" : undefined} onClick={() => window.location.assign("/ads/settings/connections")}>连接 Meta 账号</Button>
+              <Button onClick={() => window.location.assign("/ads/settings/meta-app")}>配置 Meta App</Button>
+            </>
+          }
+        />
+      ) : (
+        <>
       <div className="entity-tabs">
         {tabs.map((item) => (
           <button key={item} className={cn("entity-tab", tab === item && "active")} type="button" onClick={() => setTab(item)}>
@@ -99,6 +129,9 @@ export function SyncCenterPage({
         {tab === "审计日志" ? <AuditPanel /> : null}
         {detailJob?.error ? <ErrorDetail job={detailJob} onFocus={() => { setTab("API 错误"); setSelectedJobId(detailJob.id); }} /> : null}
       </section>
+        </>
+      )}
+      </DataSourceGate>
     </StateGate>
   );
 }

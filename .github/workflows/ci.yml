@@ -8,6 +8,7 @@ on:
 
 jobs:
   validate:
+    name: pnpm quality gate
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -19,7 +20,9 @@ jobs:
           node-version: 24
 
       - name: Enable pnpm
-        run: corepack enable
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.9.0 --activate
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -50,6 +53,14 @@ jobs:
           path: playwright-report
           if-no-files-found: ignore
 
+      - name: Upload Playwright test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: test-results/playwright
+          if-no-files-found: ignore
+
       - name: Upload UI screenshots
         if: always()
         uses: actions/upload-artifact@v4
@@ -57,3 +68,28 @@ jobs:
           name: ui-screenshots
           path: test-results/ui
           if-no-files-found: error
+
+  docker:
+    name: Docker build/config validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Compose
+        shell: bash
+        env:
+          APP_BASE_URL: http://localhost
+          AUTH_SECRET: ci_auth_secret_32_bytes_minimum_value
+          DATABASE_URL: postgresql://adflow:ci_postgres_password@postgres:5432/adflow?schema=public
+          DEMO_MODE: "true"
+          META_OAUTH_REDIRECT_URI: http://localhost/api/meta/oauth/callback
+          POSTGRES_PASSWORD: ci_postgres_password
+          REDIS_PASSWORD: ci_redis_password
+          REDIS_URL: redis://:ci_redis_password@redis:6379/0
+          TOKEN_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+          TOKEN_ENCRYPTION_KEY_BASE64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+        run: |
+          set -euo pipefail
+          docker compose -f docker-compose.prod.yml config
+          docker compose -f docker-compose.prod.yml build

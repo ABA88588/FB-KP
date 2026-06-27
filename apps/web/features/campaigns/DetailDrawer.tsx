@@ -12,6 +12,7 @@ export function DetailDrawer({
   entity,
   level,
   currency,
+  sourceLabel,
   readOnly,
   onClose,
   onSave,
@@ -20,6 +21,7 @@ export function DetailDrawer({
   entity: CampaignEntity | null;
   level: EntityLevel;
   currency: Currency;
+  sourceLabel: string;
   readOnly: boolean;
   onClose: () => void;
   onSave: (id: string, input: { name: string; status: "active" | "paused"; budget: string }) => CampaignEntity | null;
@@ -101,7 +103,7 @@ export function DetailDrawer({
             </div>
             <div className="drawer-content">
               {tab === "概览" ? <OverviewTab entity={entity} /> : null}
-              {tab === "设置" ? <SettingsTab entity={entity} currency={currency} editMode={editMode} form={editForm} setForm={setEditForm} onSave={saveEdit} onCancel={cancelEdit} /> : null}
+              {tab === "设置" ? <SettingsTab entity={entity} currency={currency} sourceLabel={sourceLabel} editMode={editMode} form={editForm} setForm={setEditForm} onSave={saveEdit} onCancel={cancelEdit} /> : null}
               {tab === "趋势" ? <TrendTab /> : null}
               {tab === "活动" ? <ActivityTab /> : null}
             </div>
@@ -145,7 +147,7 @@ function OverviewTab({ entity }: { entity: CampaignEntity }) {
       </div>
       <section className="drawer-section">
         <h3>投放状态</h3>
-        <div className="setting-row"><span>已配置状态</span><strong>{entity.status === "active" ? "ACTIVE" : "PAUSED"}</strong></div>
+        <div className="setting-row"><span>已配置状态</span><strong>{entity.status === "active" ? "投放中" : "已暂停"}</strong></div>
         <div className="setting-row"><span>有效状态</span><strong className="success-text">{entity.effective}</strong></div>
         <div className="setting-row"><span>最近更新</span><strong>{entity.updated}</strong></div>
       </section>
@@ -167,6 +169,7 @@ function OverviewTab({ entity }: { entity: CampaignEntity }) {
 function SettingsTab({
   entity,
   currency,
+  sourceLabel,
   editMode,
   form,
   setForm,
@@ -175,6 +178,7 @@ function SettingsTab({
 }: {
   entity: CampaignEntity;
   currency: Currency;
+  sourceLabel: string;
   editMode: boolean;
   form: { name: string; status: "active" | "paused"; budget: string };
   setForm: (form: { name: string; status: "active" | "paused"; budget: string }) => void;
@@ -187,17 +191,17 @@ function SettingsTab({
       {editMode ? (
         <div className="drawer-edit-form">
           <label>名称<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
-          <label>状态<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as "active" | "paused" })}><option value="active">ACTIVE</option><option value="paused">PAUSED</option></select></label>
+          <label>状态<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as "active" | "paused" })}><option value="active">投放中</option><option value="paused">已暂停</option></select></label>
           <label>日预算 {currency} ({currencySymbol(currency)})<input value={form.budget} inputMode="numeric" onChange={(event) => setForm({ ...form, budget: event.target.value.replace(/\D/g, "") })} /></label>
           <div><Button onClick={onCancel}>取消</Button><Button variant="primary" onClick={onSave}>保存设置</Button></div>
         </div>
       ) : null}
       <div className="setting-row"><span>名称</span><strong>{entity.name}</strong></div>
       <div className="setting-row"><span>Meta ID</span><strong>{entity.id}</strong></div>
-      <div className="setting-row"><span>当前状态</span><strong>{entity.status === "active" ? "ACTIVE" : "PAUSED"}</strong></div>
+      <div className="setting-row"><span>当前状态</span><strong>{entity.status === "active" ? "投放中" : "已暂停"}</strong></div>
       <div className="setting-row"><span>预算</span><strong>{entity.budget}</strong></div>
-      <div className="setting-row"><span>默认创建状态</span><strong>PAUSED</strong></div>
-      <div className="setting-row"><span>数据来源</span><strong>Demo Provider</strong></div>
+      <div className="setting-row"><span>默认创建状态</span><strong>已暂停</strong></div>
+      <div className="setting-row"><span>数据来源</span><strong>{sourceLabel}</strong></div>
     </section>
   );
 }

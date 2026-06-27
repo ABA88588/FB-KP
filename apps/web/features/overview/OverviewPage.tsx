@@ -4,9 +4,9 @@ import { ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { DataState } from "@adflow/shared";
-import { demoProvider, type CampaignEntity } from "@adflow/meta-client";
+import type { CampaignEntity } from "@adflow/meta-client";
 import type { ToastKind } from "@/lib/app-types";
-import { Button, HealthPanel, KpiCard, PageHeader, StateGate, StatusDot, TrendChart } from "@/components/ui";
+import { AccessGuidePanel, Button, DataSourceGate, HealthPanel, KpiCard, PageHeader, StateGate, StatusDot, TrendChart } from "@/components/ui";
 import { useDemoContext } from "@/lib/demo-context";
 import { useAppRuntime } from "@/lib/app-runtime";
 
@@ -21,14 +21,17 @@ export function OverviewPage({
   const dataState = providedDataState ?? runtime.dataState;
   const showToast = providedShowToast ?? runtime.showToast;
   const router = useRouter();
-  const { account, accountLabel, dateLabel, dateRange, compareRange, queryContext, revision } = useDemoContext();
-  const kpis = demoProvider.getKpis(queryContext);
-  const topRows = demoProvider.listEntities("campaign", account.id, "", queryContext).slice(0, 5);
+  const { api, connection, account, accountLabel, dateLabel, dateRange, compareRange, queryContext, revision } = useDemoContext();
+  const kpis = api.getKpis(queryContext);
+  const topRows = api.listEntities("campaign", account.id, "", queryContext).slice(0, 5);
   const trend = buildOverviewTrend(account.currency, dateRange, compareRange);
   const health = buildHealthData(account.name, account.currency, topRows);
+  const routePrefix = connection.mode === "demo" ? "/demo" : "";
   const referenceContext = account.id === "act_23840008291" && dateRange === "近 7 天" && compareRange === "上一周期";
   const [snapshotSavedAt, setSnapshotSavedAt] = useState<string | null>(null);
   void revision;
+
+  const hasLiveData = !(connection.mode === "live" && kpis.length === 0 && topRows.length === 0);
 
   const saveSnapshot = () => {
     const savedAt = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
@@ -39,18 +42,23 @@ export function OverviewPage({
 
   return (
     <StateGate state={dataState}>
+      <DataSourceGate connection={connection}>
       <PageHeader
         eyebrow={accountLabel}
         title="广告总览"
-        description={`${dateLabel} · ${snapshotSavedAt ? `快照保存于 ${snapshotSavedAt}` : "报表更新于 6 分钟前"}`}
+        description={connection.mode === "live" && !hasLiveData ? "等待 Meta App 配置、账号授权和首次同步" : `${dateLabel} · ${snapshotSavedAt ? `快照保存于 ${snapshotSavedAt}` : "报表更新于 6 分钟前"}`}
         actions={
           <>
-            <Button onClick={saveSnapshot}>保存快照</Button>
-            <Button variant="primary" onClick={() => router.push("/campaigns/new?step=1")}>+ 新建广告</Button>
+            <Button disabled={!hasLiveData} title={!hasLiveData ? "需要先连接 Meta 并同步真实数据" : undefined} onClick={saveSnapshot}>保存快照</Button>
+            <Button disabled={!connection.canWrite} title={!connection.canWrite ? "写入总开关未开启，或当前为紧急只读" : undefined} variant="primary" onClick={() => router.push(`${routePrefix}/campaigns/new?step=1`)}>+ 新建广告</Button>
           </>
         }
       />
 
+      {!hasLiveData ? (
+        <AccessGuidePanel connection={connection} />
+      ) : (
+        <>
       <div className="metric-grid">
         {kpis.map((metric) => <KpiCard key={metric.label} metric={metric} />)}
       </div>
@@ -71,7 +79,7 @@ export function OverviewPage({
           <div className="chart-summary">{referenceContext ? "本周期花费增长 12.4%，购买价值增长 18.9%，ROAS 提升 5.8%。" : trend.summary}</div>
         </article>
 
-        {referenceContext ? <HealthPanel onOpenSync={() => router.push("/sync-center")} /> : <OverviewHealthPanel data={health} onOpenSync={() => router.push("/sync-center")} />}
+        {referenceContext ? <HealthPanel onOpenSync={() => router.push(`${routePrefix}/sync-center`)} /> : <OverviewHealthPanel data={health} onOpenSync={() => router.push(`${routePrefix}/sync-center`)} />}
       </div>
 
       <div className="overview-bottom">
@@ -81,7 +89,7 @@ export function OverviewPage({
               <h2>广告系列表现</h2>
               <p>按花费排序的前 5 项</p>
             </div>
-            <button className="text-button" type="button" onClick={() => router.push("/campaigns?level=campaign")}>
+            <button className="text-button" type="button" onClick={() => router.push(`${routePrefix}/campaigns?level=campaign`)}>
               查看全部 <ArrowRight size={13} />
             </button>
           </div>
@@ -109,10 +117,13 @@ export function OverviewPage({
             </div>
           </div>
           {buildAttentionItems(account.name, account.currency, topRows).map((item) => (
-            <Attention key={item.title} level={item.level} title={item.title} detail={item.detail} onClick={() => router.push(item.href)} />
+            <Attention key={item.title} level={item.level} title={item.title} detail={item.detail} onClick={() => router.push(`${routePrefix}${item.href}`)} />
           ))}
         </article>
       </div>
+        </>
+      )}
+      </DataSourceGate>
     </StateGate>
   );
 }

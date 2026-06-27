@@ -8,6 +8,12 @@ const screenshotOptions = {
   threshold: 0.2
 };
 
+async function capture(page: import("@playwright/test").Page, path: string, fileName: string) {
+  await page.goto(path);
+  await expect(page).toHaveScreenshot(fileName, screenshotOptions);
+  await page.screenshot({ path: `${outputDir}/${fileName}`, fullPage: false });
+}
+
 test.describe("UI reference screenshots", () => {
   test.beforeEach(async ({ page }) => {
     await mkdir(outputDir, { recursive: true });
@@ -15,32 +21,16 @@ test.describe("UI reference screenshots", () => {
     await page.addInitScript(() => window.localStorage.clear());
   });
 
-  test("captures implemented pages at 1440x900", async ({ page }) => {
-    await page.goto("/overview");
-    await expect(page).toHaveScreenshot("01-overview.png", screenshotOptions);
-    await page.screenshot({ path: `${outputDir}/01-overview.png`, fullPage: false });
+  test("captures production live pages at 1440x900", async ({ page }) => {
+    await capture(page, "/ads/overview", "01-overview.png");
+    await capture(page, "/ads/campaigns", "02-campaign-manager.png");
+    await capture(page, "/ads/campaigns/new?step=4", "04-create-wizard-review.png");
+    await capture(page, "/ads/reports", "05-custom-report.png");
+    await capture(page, "/ads/sync-center", "06-sync-errors.png");
+    await capture(page, "/ads/settings/meta-app", "07-meta-app-settings.png");
+  });
 
-    await page.goto("/campaigns?level=campaign");
-    await page.getByLabel("选择 Summer Glow｜转化").check();
-    await expect(page).toHaveScreenshot("02-campaign-manager.png", screenshotOptions);
-    await page.screenshot({ path: `${outputDir}/02-campaign-manager.png`, fullPage: false });
-
-    await page.getByText("Summer Glow｜转化").first().click();
-    await expect(page).toHaveScreenshot("03-campaign-inspector.png", screenshotOptions);
-    await page.screenshot({ path: `${outputDir}/03-campaign-inspector.png`, fullPage: false });
-
-    await page.goto("/campaigns/new?step=4");
-    await page.getByText("发布前检查").waitFor();
-    await expect(page).toHaveScreenshot("04-create-wizard-review.png", screenshotOptions);
-    await page.screenshot({ path: `${outputDir}/04-create-wizard-review.png`, fullPage: false });
-
-    await page.goto("/reports");
-    await expect(page).toHaveScreenshot("05-custom-report.png", screenshotOptions);
-    await page.screenshot({ path: `${outputDir}/05-custom-report.png`, fullPage: false });
-
-    await page.goto("/sync-center");
-    await page.getByRole("button", { name: /API 错误/ }).click();
-    await expect(page).toHaveScreenshot("06-sync-errors.png", screenshotOptions);
-    await page.screenshot({ path: `${outputDir}/06-sync-errors.png`, fullPage: false });
+  test("captures demo sandbox separately", async ({ page }) => {
+    await capture(page, "/ads/demo/overview", "08-demo-sandbox-overview.png");
   });
 });

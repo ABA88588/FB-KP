@@ -54,6 +54,22 @@ pnpm e2e
 - Keep demo fixtures deterministic.
 - Keep the application runnable after each phase.
 
+## Permanent production rules
+
+- `screenshots/` is an immutable design baseline. Actual generated screenshots belong under `test-results/ui/`.
+- Browser code must never call Meta Graph or Marketing API directly; all Meta requests go through this server.
+- Meta App Secret, Access Token, database passwords, SSH private keys and all other secrets must never enter frontend code, Git, logs, test screenshots, error responses or copied command arguments.
+- `DemoProvider` and `LiveMetaProvider` must stay fully separated. Production Live mode must never mix simulated data into live views.
+- Real Meta writes require server-side permission checks, ad-account allowlist checks, explicit user confirmation, audit logging and a stable `operationId`.
+- New Campaign, Ad Set and Ad objects must default to `PAUSED`.
+- Never report local success, generated demo IDs or queued internal tasks as completed Meta success.
+- Do not make builds pass by deleting tests, lowering TypeScript strictness, adding broad `any`, skipping quality gates or relaxing visual thresholds.
+- Database changes must use reversible migrations or document a precise rollback/fix-forward path.
+- Remote server write operations are performed by exactly one deployment agent/process at a time.
+- All validation commands must be run for real before reporting PASS. If a command was not run, report it as not run.
+- Real Meta mutation retries must be bounded and must not silently retry non-idempotent creates after unknown outcomes.
+- Frontend disabled states must explain which guard blocked the action: mode, role, scope, allowlist, readonly account or global emergency readonly switch.
+
 ## UI discipline
 
 - Match the supplied prototype and design tokens.

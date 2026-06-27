@@ -1,16 +1,17 @@
 import { rowsToCsv } from "@adflow/shared";
 import { defaultAccountId, demoAccounts, entityRows, kpiMetrics, reportRows, syncJobs, usAccountId, type SeedCampaignEntity } from "./demo-data";
+import type { MetaAdsProvider, MetaProviderAvailability } from "./provider";
 import type { AdAccount, CampaignEntity, CreativeAsset, CreatedAdBundle, CreateAdDraftInput, DemoQueryContext, EntityLevel, KpiMetric, ReportRow, SyncJob, UpdateEntityInput } from "./types";
 
 const baseCreatives: Array<Omit<CreativeAsset, "accountId">> = [
-  { id: "asset-1", title: "SUMMER GLOW", file: "summer_glow.jpg", type: "图片", usage: 2, recent: 5, thumb: 1, status: "active" },
-  { id: "asset-2", title: "NEW SERUM", file: "new_serum.mp4", type: "视频", usage: 3, recent: 4, thumb: 2, status: "active" },
+  { id: "asset-1", title: "夏季焕亮", file: "summer_glow.jpg", type: "图片", usage: 2, recent: 5, thumb: 1, status: "active" },
+  { id: "asset-2", title: "新精华推广", file: "new_serum.mp4", type: "视频", usage: 3, recent: 4, thumb: 2, status: "active" },
   { id: "asset-3", title: "20% OFF", file: "20_off.jpg", type: "图片", usage: 4, recent: 3, thumb: 3, status: "active" },
-  { id: "asset-4", title: "UGC ROUTINE", file: "ugc_routine.jpg", type: "图片", usage: 5, recent: 2, thumb: 4, status: "active" },
-  { id: "asset-5", title: "BEAUTY SET", file: "beauty_set.jpg", type: "图片", usage: 6, recent: 1, thumb: 5, status: "active" }
+  { id: "asset-4", title: "用户内容种草", file: "ugc_routine.jpg", type: "图片", usage: 5, recent: 2, thumb: 4, status: "active" },
+  { id: "asset-5", title: "美妆套装", file: "beauty_set.jpg", type: "图片", usage: 6, recent: 1, thumb: 5, status: "active" }
 ];
 
-export class DemoMetaAdsProvider {
+export class DemoMetaAdsProvider implements MetaAdsProvider {
   readonly mode = "demo" as const;
   #entities: Record<EntityLevel, CampaignEntity[]>;
   #syncJobs: SyncJob[];
@@ -57,6 +58,15 @@ export class DemoMetaAdsProvider {
         usage: Math.max(0, creative.usage - 1)
       }))
     ];
+  }
+
+  getAvailability(): MetaProviderAvailability {
+    return {
+      mode: "demo",
+      configured: true,
+      disabled: false,
+      status: "configured"
+    };
   }
 
   listAdAccounts(): AdAccount[] {
@@ -241,7 +251,7 @@ export class DemoMetaAdsProvider {
       accountId,
       id: `asset-demo-${this.#creativeSequence}`,
       title: `DEMO ASSET ${this.#creativeSequence}`,
-      file: `demo_asset_${this.#creativeSequence}.jpg`,
+      file: `演示素材_${this.#creativeSequence}.jpg`,
       type: "图片",
       usage: 0,
       recent: 0,
@@ -345,7 +355,7 @@ function seedEntities(rows: readonly SeedCampaignEntity[], account: AdAccount | 
 function accountFor(accountId?: string): AdAccount {
   return demoAccounts.find((account) => account.id === accountId) ?? demoAccounts[0] ?? {
     id: defaultAccountId,
-    name: "Seoul Beauty KR",
+    name: "首尔美妆演示账户",
     maskedId: "act_••••8291",
     currency: "KRW",
     timezone: "Asia/Seoul",

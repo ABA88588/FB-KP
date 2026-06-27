@@ -1,3 +1,13 @@
 export { demoProvider, DemoMetaAdsProvider } from "./demo-provider";
 export { demoAccounts, entityRows, kpiMetrics, reportRows, syncJobs } from "./demo-data";
+export { createLiveMetaAdsProviderFromEnv, LiveMetaAdsProvider } from "./live/live-provider";
+export { MetaHttpClient } from "./live/http-client";
+export { MetaApiError, MetaProviderConfigurationError, normalizeMetaError } from "./live/errors";
+export { parseMetaCursorPage } from "./live/cursor";
+export { assertSupportedMetaGraphVersion, evaluateBreakdownCompatibility, isSupportedBreakdownCombination, metaFieldRegistry, supportedMetaGraphVersions } from "./schemas/version-registry";
+export { DEFAULT_META_MUTATION_STATUS, buildMetaMutationGuardInput, evaluateMetaMutationGuard } from "./provider";
 export type { AdAccount, CampaignEntity, ConfiguredStatus, CreativeAsset, CreatedAdBundle, CreateAdDraftInput, DemoQueryContext, EffectiveStatus, EntityLevel, KpiMetric, ReportRow, SyncJob, UpdateEntityInput } from "./types";
+export type { BreakdownCompatibilityInput, BreakdownCompatibilityResult, MetaActionBreakdown, MetaBreakdown } from "./schemas/version-registry";
+export type { LiveAdAccount, LiveAd, LiveAdSet, LiveAsset, LiveCampaign, LiveCreative, LiveInsight, LiveMetaAdsProviderContract, LiveMetaRequest, MetaAdsProvider, MetaCreateAdCreativeInput, MetaCreateAdInput, MetaCreateAdSetInput, MetaCreateCampaignInput, MetaCursorPage, MetaMutationGuardInput, MetaMutationResult, MetaPageParams, MetaProviderAvailability, MetaProviderMode } from "./provider";
+export type { LiveMetaAdsProviderEnv } from "./live/live-provider";
+export type { MetaInternalErrorCode, NormalizedMetaError } from "./live/errors";

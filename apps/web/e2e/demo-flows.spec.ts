@@ -1,258 +1,277 @@
-import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-const baselineHashes: Record<string, string> = {
-  "00-ui-contact-sheet.png": "B25733257512D673E6F28B549DE3D8475C5AE72224C5E632FA20D0B30D3233E7",
-  "01-overview.png": "3B00A82C5C8227C1E0D290D52BEC7F4F032DFBDBF4868A67A5903DC1ABA84A8E",
-  "02-campaign-manager.png": "D8A9986C2ED9F31853B4B70620AE8CD930F1B554C056FC7797DA0423FEC41341",
-  "03-campaign-inspector.png": "838524D6784525CE6F441255DF5EC4DC16C5348DFD17FE2A2EC51B98BF685067",
-  "04-create-wizard-review.png": "7D627DCA75CF70C64CCB71815D8CB0B29BCE531EDF80A2AD2E674140928F6CD7",
-  "05-custom-report.png": "C4FD27F6972E34D19675B4539B5002E0DBDBE6791D0E32990B5BB411D1962E95",
-  "06-sync-errors.png": "7CB33C202A65929AF3BEAA065C2EA9AB2112AA83EECFC3FC15648C466E0D83C7"
-};
+const productionPaths = [
+  "/ads/overview",
+  "/ads/campaigns",
+  "/ads/creatives",
+  "/ads/reports",
+  "/ads/sync-center",
+  "/ads/settings/meta-app",
+  "/ads/settings/connections",
+  "/ads/settings/write-controls"
+];
 
-test.describe("demo data flows", () => {
+const forbiddenProductionCopy = [
+  "Demo mode",
+  "Demo Provider",
+  "Seoul Beauty KR",
+  "demo_asset",
+  "Summer Glow",
+  "Retargeting",
+  "Beauty Bundle",
+  "UGC ROUTINE",
+  "NEW SERUM",
+  "Instagram Feed",
+  "PAUSED",
+  "Sales",
+  "Broad",
+  "META_RATE_LIMITED"
+];
+
+test.describe("production live mode", () => {
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript(() => window.localStorage.clear());
+  });
+
+  test("base path and legacy routes redirect into /ads", async ({ page }) => {
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/ads\/login$/);
+
+    await page.goto("/login");
+    await expect(page).toHaveURL(/\/ads\/login$/);
+
     await page.goto("/overview");
-    await page.evaluate(() => window.localStorage.clear());
+    await expect(page).toHaveURL(/\/ads\/overview$/);
   });
 
-  test("account switch changes overview data", async ({ page }) => {
-    await page.goto("/overview");
-    const firstMetric = page.getByTestId("kpi-card").first().locator(".metric-value");
-    const before = await firstMetric.innerText();
-
-    await page.getByTestId("account-picker").click();
-
-    await expect(page.getByTestId("account-picker")).toContainText("Glow US DTC");
-    await expect(firstMetric).not.toHaveText(before);
+  test("login page is formal Chinese and has no test account prefill", async ({ page }) => {
+    await page.goto("/ads/login");
+    await expect(page.getByRole("heading", { name: "AdFlow 广告工作台" })).toBeVisible();
+    await expect(page.getByText("当前尚未连接 Meta。登录后请先配置 Meta App，并完成账号授权。")).toBeVisible();
+    await expect(page.getByRole("button", { name: "登录工作台" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "进入接入向导" })).toBeVisible();
+    await expect(page.locator('input[type="email"]')).toHaveValue("");
+    const text = await page.locator("body").innerText();
+    expect(text).not.toContain("Sign in");
+    expect(text).not.toContain("Email");
+    expect(text).not.toContain("owner@example.com");
   });
 
-  test("overview account persists across Campaign, Reports and Sync", async ({ page }) => {
-    await page.goto("/overview");
-    await page.getByTestId("account-picker").click();
-    await expect(page.getByTestId("account-picker")).toContainText("Glow US DTC");
-
-    await page.goto("/campaigns?level=campaign&status=all&minSpend=0");
-    await expect(page.getByTestId("account-picker")).toContainText("Glow US DTC");
-    await page.goto("/reports");
-    await expect(page.getByTestId("account-picker")).toContainText("Glow US DTC");
-    await page.goto("/sync-center");
-    await expect(page.getByTestId("account-picker")).toContainText("Glow US DTC");
+  test("live overview shows access guide instead of fake KPIs", async ({ page }) => {
+    await page.goto("/ads/overview");
+    await expect(page.getByTestId("live-access-guide")).toBeVisible();
+    await expect(page.getByText("开始连接你的 Meta 广告账户")).toBeVisible();
+    await expect(page.getByText("配置 Meta App").first()).toBeVisible();
+    await expect(page.getByTestId("account-picker")).toContainText("未连接广告账户");
+    await expect(page.getByTestId("account-picker")).toContainText("请选择 Meta 广告账户");
+    await expect(page.getByTestId("kpi-card")).toHaveCount(0);
   });
 
-  test("refresh keeps selected account and date range", async ({ page }) => {
-    await page.goto("/overview");
-    await page.getByTestId("account-picker").click();
-    await page.getByTestId("date-range-picker").click();
-    await expect(page.getByTestId("account-picker")).toContainText("Glow US DTC");
-    await expect(page.getByTestId("date-range-picker")).toContainText("近 14 天");
-
-    await page.reload();
-
-    await expect(page.getByTestId("account-picker")).toContainText("Glow US DTC");
-    await expect(page.getByTestId("date-range-picker")).toContainText("近 14 天");
+  test("live business pages show formal empty states", async ({ page }) => {
+    const expectedTitles: Record<string, string> = {
+      "/ads/campaigns": "暂无真实广告对象",
+      "/ads/creatives": "暂无真实素材",
+      "/ads/reports": "暂无真实 Insights 数据",
+      "/ads/sync-center": "暂无同步任务"
+    };
+    for (const [path, title] of Object.entries(expectedTitles)) {
+      await page.goto(path);
+      await expect(page.getByText(title)).toBeVisible();
+      const text = await page.locator("body").innerText();
+      for (const forbidden of forbiddenProductionCopy) {
+        expect(text, `${path} should not contain ${forbidden}`).not.toContain(forbidden);
+      }
+    }
   });
 
-  test("budget edit changes the campaign table", async ({ page }) => {
-    await page.goto("/campaigns?level=campaign&status=all&minSpend=0");
-    const firstRow = page.getByTestId("campaign-row").first();
-    await expect(firstRow).toBeVisible();
-
-    await firstRow.locator('input[type="checkbox"]').check();
-    await page.locator(".bulk-bar button").nth(2).click();
-    await expect(page.locator(".budget-dialog")).toBeVisible();
-    await page.locator(".budget-dialog input").fill("333000");
-    await page.locator(".budget-dialog .dialog-actions .button.primary").click();
-
-    await expect(firstRow).toContainText("333,000");
+  test("production pages are localized and free of demo labels", async ({ page }) => {
+    for (const path of productionPaths) {
+      await page.goto(path);
+      const text = await page.locator("body").innerText();
+      await expect(page.getByText("正式 Meta").first()).toBeVisible();
+      for (const forbidden of forbiddenProductionCopy) {
+        expect(text, `${path} should not contain ${forbidden}`).not.toContain(forbidden);
+      }
+    }
   });
 
-  test("two account datasets do not affect each other", async ({ page }) => {
-    await page.goto("/campaigns?level=campaign&status=all&minSpend=0");
-    const firstRow = page.getByTestId("campaign-row").first();
-    await firstRow.locator('input[type="checkbox"]').check();
-    await page.locator(".bulk-bar button").nth(2).click();
-    await page.locator(".budget-dialog input").fill("333000");
-    await page.locator(".budget-dialog .dialog-actions .button.primary").click();
-    await expect(firstRow).toContainText("333,000");
+  test("new ad entry is disabled until write prerequisites are met", async ({ page }) => {
+    await page.goto("/ads/campaigns");
+    await expect(page.getByRole("button", { name: /新建广告/ })).toBeDisabled();
 
-    await page.getByTestId("account-picker").click();
-    await expect(page.getByTestId("account-picker")).toContainText("Glow US DTC");
-    await expect(page.getByTestId("campaign-row").first()).not.toContainText("333,000");
-
-    await page.getByTestId("account-picker").click();
-    await expect(page.getByTestId("account-picker")).toContainText("Seoul Beauty KR");
-    await expect(page.getByTestId("campaign-row").first()).toContainText("333,000");
+    await page.goto("/ads/campaigns/new?step=4");
+    await expect(page.getByText("真实发布条件尚未满足")).toBeVisible();
+    await expect(page.getByText("Meta App 未配置").first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "发布不可用" })).toBeDisabled();
+    const text = await page.locator("body").innerText();
+    expect(text).not.toContain("模拟发布成功");
+    expect(text).not.toContain("Instagram Feed");
   });
 
-  test("USD account shows dollar amounts", async ({ page }) => {
-    await page.goto("/campaigns?level=campaign&status=all&minSpend=0");
-    await page.getByTestId("account-picker").click();
-    await expect(page.getByTestId("account-picker")).toContainText("Glow US DTC");
-    await expect(page.getByTestId("campaign-row").first()).toContainText("$");
+  test("meta app and write controls pages use Chinese production copy", async ({ page }) => {
+    await page.goto("/ads/settings/meta-app");
+    await expect(page.getByRole("heading", { name: "Meta App 配置" }).first()).toBeVisible();
+    await expect(page.getByText("应用配置状态")).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "OAuth 回调地址" })).toHaveValue(/\/ads\/api\/meta\/oauth\/callback$/);
+    let text = await page.locator("body").innerText();
+    expect(text).not.toContain("unconfigured");
+    expect(text).not.toContain("Allowed Ad Account IDs");
+    expect(text).not.toContain("Owner/Admin/Operator");
+
+    await page.goto("/ads/settings/write-controls");
+    await expect(page.getByText("真实写入守卫")).toBeVisible();
+    text = await page.locator("body").innerText();
+    expect(text).toContain("Token 权限范围");
+    expect(text).toContain("允许写入的广告账户 ID");
+    expect(text).not.toContain("Token Scope");
+    expect(text).not.toContain("write controls");
   });
 
-  test("USD account budget entry points use dollars", async ({ page }) => {
-    await page.goto("/campaigns?level=campaign");
-    await switchToUsd(page);
+  test("meta app config saves supported Graph API versions without native pattern validation", async ({ page }) => {
+    const savedBodies: Record<string, unknown>[] = [];
+    await mockMetaAppSettings(page, {
+      configured: false,
+      secretConfigured: false,
+      graphApiVersion: "v25.0"
+    }, savedBodies);
 
-    await expect(page.locator(".filter-chips")).toContainText("$80");
-    const firstRow = page.getByTestId("campaign-row").first();
-    await firstRow.locator('input[type="checkbox"]').check();
-    await page.locator(".bulk-bar button").nth(2).click();
-    await expect(page.locator(".budget-dialog")).toContainText("USD ($)");
-    await page.locator(".budget-dialog .button").first().click();
+    await page.goto("/ads/settings/meta-app");
+    await expect(page.getByRole("button", { name: "测试配置" })).toBeDisabled();
+    await page.getByLabel("Meta App ID").fill("123456789012345");
+    await page.getByLabel("Meta App Secret").fill("test-input-value");
+    await page.getByLabel("Graph API 版本").fill("v25.0");
+    await page.getByRole("button", { name: "保存配置" }).click();
 
-    await firstRow.click();
-    await page.locator(".drawer-footer .button.primary").click();
-    await expect(page.locator(".drawer-edit-form")).toContainText("USD ($)");
+    await expect(page.getByText("配置已保存。应用密钥已加密写入数据库，前端不会回显明文。")).toBeVisible();
+    await expect(page.getByLabel("Graph API 版本")).toHaveValue("v25.0");
+    await expect(page.locator(".detail-grid")).toContainText("应用 ID");
+    await expect(page.locator(".detail-grid")).toContainText("已保存");
+    await expect(page.locator(".detail-grid")).toContainText("v25.0");
+    await expect(page.getByRole("button", { name: "测试配置" })).toBeEnabled();
+    expect(savedBodies).toHaveLength(1);
+    expect(savedBodies[0]?.graphApiVersion).toBe("v25.0");
   });
 
-  test("detail drawer edit syncs back to the table", async ({ page }) => {
-    await page.goto("/campaigns?level=campaign&status=all&minSpend=0");
-    const firstRow = page.getByTestId("campaign-row").first();
-    await firstRow.click();
-    await page.locator(".drawer-footer .button.primary").click();
-    await page.locator(".drawer-edit-form input").first().fill("Edited Campaign Demo");
-    await page.locator(".drawer-edit-form input").last().fill("444000");
-    await page.locator(".drawer-edit-form .button.primary").click();
+  test("meta app config normalizes 25.0 and preserves secret on validation failure", async ({ page }) => {
+    const savedBodies: Record<string, unknown>[] = [];
+    await mockMetaAppSettings(page, {
+      configured: false,
+      secretConfigured: false,
+      graphApiVersion: "v25.0"
+    }, savedBodies);
 
-    await expect(firstRow).toContainText("Edited Campaign Demo");
-    await expect(firstRow).toContainText("444,000");
+    await page.goto("/ads/settings/meta-app");
+    await page.getByLabel("Meta App ID").fill("123456789012345");
+    await page.getByLabel("Meta App Secret").fill("input-value-that-stays");
+    await page.getByLabel("Graph API 版本").fill("abc");
+    await page.getByRole("button", { name: "保存配置" }).click();
+
+    await expect(page.getByText("请输入 Graph API 版本，例如 v25.0")).toBeVisible();
+    await expect(page.getByLabel("Meta App Secret")).toHaveValue("input-value-that-stays");
+    expect(savedBodies).toHaveLength(0);
+
+    await page.getByLabel("Graph API 版本").fill("25.0");
+    await page.getByRole("button", { name: "保存配置" }).click();
+
+    await expect(page.getByText("配置已保存。应用密钥已加密写入数据库，前端不会回显明文。")).toBeVisible();
+    await expect(page.getByLabel("Graph API 版本")).toHaveValue("v25.0");
+    expect(savedBodies).toHaveLength(1);
+    expect(savedBodies[0]?.graphApiVersion).toBe("v25.0");
+    expect(savedBodies[0]?.metaAppSecret).toBe("input-value-that-stays");
   });
 
-  test("simulated publish creates a searchable ad object", async ({ page }) => {
-    await page.goto("/campaigns/new?step=4");
-    await page.locator(".wizard-footer .button.primary").click();
+  test("meta app config does not clear an already saved secret when saving again", async ({ page }) => {
+    const savedBodies: Record<string, unknown>[] = [];
+    await mockMetaAppSettings(page, {
+      configured: true,
+      secretConfigured: true,
+      graphApiVersion: "v24.0"
+    }, savedBodies);
 
-    await expect(page).toHaveURL(/\/campaigns\?level=campaign/);
-    await expect(page.getByTestId("campaign-row").first()).toContainText("Summer Glow");
-  });
+    await page.goto("/ads/settings/meta-app");
+    await expect(page.getByRole("button", { name: "测试配置" })).toBeDisabled();
+    await page.getByLabel("Graph API 版本").fill("25.0");
+    await page.getByRole("button", { name: "保存配置" }).click();
 
-  test("simulated publish increases campaign tab count", async ({ page }) => {
-    await page.goto("/campaigns?level=campaign&status=all&minSpend=0");
-    const before = await entityTabCount(page, "广告系列");
-
-    await page.goto("/campaigns/new?step=4");
-    await page.locator(".wizard-footer .button.primary").click();
-
-    await expect(page).toHaveURL(/\/campaigns\?level=campaign/);
-    await expect.poll(() => entityTabCount(page, "广告系列")).toBe(before + 1);
-  });
-
-  test("USD create flow does not show KRW or Seoul identity", async ({ page }) => {
-    await page.goto("/overview");
-    await switchToUsd(page);
-    await page.goto("/campaigns/new?step=4");
-
-    const wizard = page.locator(".wizard-screen");
-    await expect(wizard).toContainText("$120");
-    await expect(wizard).toContainText("glowusdtc.com");
-    await expect(wizard).not.toContainText("₩");
-    await expect(wizard).not.toContainText("seoulbeauty.kr");
-    await expect(wizard).not.toContainText("韩国");
-  });
-
-  test("new creative appears in creative center after simulated publish", async ({ page }) => {
-    await page.goto("/campaigns/new?step=4");
-    await page.locator(".wizard-footer .button.primary").click();
-    await expect(page).toHaveURL(/\/campaigns\?level=campaign/);
-
-    await page.locator(".nav-item").nth(2).click();
-    await page.locator(".search-box input").fill("summer_glow_hero_01");
-    await expect(page.getByTestId("creative-card").first()).toContainText("summer_glow_hero_01");
-  });
-
-  test("report configuration changes the generated result", async ({ page }) => {
-    await page.goto("/reports");
-    const firstRow = page.getByTestId("report-row").first();
-    await expect(firstRow).toBeVisible();
-    const before = await firstRow.innerText();
-
-    const selects = page.locator(".report-builder select");
-    await selects.nth(0).selectOption("Campaign");
-    await selects.nth(1).selectOption("近 14 天");
-    await selects.nth(2).selectOption({ index: 1 });
-    await selects.nth(3).selectOption({ index: 1 });
-    await page.locator(".report-builder .button.primary.full").click();
-
-    await expect(page.getByTestId("report-note")).toContainText("Campaign", { timeout: 3_000 });
-    await expect(firstRow).not.toHaveText(before);
-  });
-
-  test("USD report preset keeps dollar currency", async ({ page }) => {
-    await page.goto("/overview");
-    await switchToUsd(page);
-    await page.goto("/reports");
-
-    await page.locator(".report-side button", { hasText: "Campaign ROAS 监控" }).click();
-    await page.locator(".report-builder .button.primary.full").click();
-
-    await expect(page.getByTestId("report-note")).toContainText("Glow US DTC", { timeout: 3_000 });
-    await expect(page.getByTestId("report-row").first()).toContainText("$");
-    await expect(page.getByTestId("report-row").first()).not.toContainText("₩");
-  });
-
-  test("report without breakdown returns a single summary group", async ({ page }) => {
-    await page.goto("/reports");
-    const breakdownSection = page.locator(".builder-section").filter({ hasText: "Breakdown" });
-    await breakdownSection.locator(".token-list button").first().click();
-    await page.locator(".report-builder .button.primary.full").click();
-
-    await expect(page.getByTestId("report-note")).toContainText("行", { timeout: 3_000 });
-    await expect(page.getByTestId("report-row").first()).toContainText("全部");
-    const visibleRows = await page.getByTestId("report-row").allInnerTexts();
-    expect(visibleRows.every((row) => row.includes("全部"))).toBe(true);
-    expect(visibleRows.join(" ")).not.toContain("Facebook");
-    expect(visibleRows.join(" ")).not.toContain("Instagram");
-  });
-
-  test("no-compare KPI has no trend arrow", async ({ page }) => {
-    await page.goto("/overview");
-    const compareButton = page.locator(".top-control").filter({ hasText: "对比：" });
-    await compareButton.click();
-    await compareButton.click();
-
-    const firstDelta = page.getByTestId("kpi-card").first().locator(".metric-delta");
-    await expect(compareButton).toContainText("不对比");
-    await expect(firstDelta).toContainText("—");
-    await expect(firstDelta.locator("svg")).toHaveCount(0);
-    await expect(firstDelta).not.toHaveClass(/up|down/);
-  });
-
-  test("new sync task progresses from running to success", async ({ page }) => {
-    await page.goto("/sync-center");
-    await page.locator(".page-actions .button.primary").click();
-
-    const newestJob = page.getByTestId("sync-job-row").first();
-    await expect(newestJob).toContainText("运行中");
-    await expect(newestJob).toContainText("成功", { timeout: 3_000 });
+    await expect(page.getByText("配置已保存。应用密钥已加密写入数据库，前端不会回显明文。")).toBeVisible();
+    await expect(page.getByRole("button", { name: "测试配置" })).toBeEnabled();
+    expect(savedBodies).toHaveLength(1);
+    expect(savedBodies[0]?.graphApiVersion).toBe("v25.0");
+    expect(savedBodies[0]).not.toHaveProperty("metaAppSecret");
   });
 });
 
-async function switchToUsd(page: Page) {
-  const picker = page.getByTestId("account-picker");
-  if (!(await picker.innerText()).includes("Glow US DTC")) {
-    await picker.click();
-  }
-  await expect(picker).toContainText("Glow US DTC");
-}
+test.describe("demo sandbox", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.addInitScript(() => window.localStorage.clear());
+  });
 
-async function entityTabCount(page: Page, label: string): Promise<number> {
-  const text = await page.locator(".entity-tab", { hasText: label }).innerText();
-  return Number(text.match(/\d+/)?.[0] ?? 0);
-}
+  test("demo sandbox is isolated and localized", async ({ page }) => {
+    await page.goto("/ads/demo/overview");
+    await expect(page.getByText("演示沙箱").first()).toBeVisible();
+    await expect(page.getByText("所有数据均为模拟，不会连接 Meta，也不会写入真实广告账户。")).toBeVisible();
+    await expect(page.getByTestId("account-picker")).toContainText("首尔美妆演示账户");
+    await expect(page.getByTestId("kpi-card").first()).toBeVisible();
 
-test.describe("design baselines", () => {
-  for (const [fileName, expectedHash] of Object.entries(baselineHashes)) {
-    test(`${fileName} is unchanged`, async () => {
-      const bytes = await readFile(resolve(process.cwd(), "../../screenshots", fileName));
-      const actualHash = createHash("sha256").update(bytes).digest("hex").toUpperCase();
-      expect(actualHash).toBe(expectedHash);
-    });
-  }
+    await page.goto("/ads/overview");
+    await expect(page.getByText("开始连接你的 Meta 广告账户")).toBeVisible();
+    await expect(page.getByTestId("account-picker")).toContainText("未连接广告账户");
+  });
+
+  test("demo navigation stays inside the sandbox", async ({ page }) => {
+    await page.goto("/ads/demo/campaigns?level=campaign");
+    await page.locator(".entity-tab", { hasText: "广告组" }).click();
+    await expect(page).toHaveURL(/\/ads\/demo\/campaigns\?level=adset$/);
+  });
 });
+
+async function mockMetaAppSettings(
+  page: import("@playwright/test").Page,
+  state: { configured: boolean; secretConfigured: boolean; graphApiVersion: string },
+  savedBodies: Record<string, unknown>[]
+) {
+  await page.route("**/ads/api/settings/meta-app", async (route) => {
+    const request = route.request();
+    if (request.method() === "GET") {
+      await route.fulfill({ json: { ok: true, data: metaAppStatus(state) } });
+      return;
+    }
+    if (request.method() === "PUT") {
+      const body = request.postDataJSON() as Record<string, unknown>;
+      const graphApiVersion = typeof body.graphApiVersion === "string" ? body.graphApiVersion : state.graphApiVersion;
+      savedBodies.push(body);
+      await route.fulfill({
+        json: {
+          ok: true,
+          data: metaAppStatus({
+            configured: true,
+            secretConfigured: true,
+            graphApiVersion
+          })
+        }
+      });
+      return;
+    }
+    await route.fallback();
+  });
+}
+
+function metaAppStatus(state: { configured: boolean; secretConfigured: boolean; graphApiVersion: string }) {
+  return {
+    organizationId: "11111111-1111-4111-8111-111111111111",
+    source: state.configured ? "database" : "unconfigured",
+    configured: state.configured,
+    metaAppId: state.configured ? "123456789012345" : "",
+    metaAppIdMasked: state.configured ? "1234...2345" : "",
+    graphApiVersion: state.graphApiVersion,
+    oauthRedirectUri: "http://127.0.0.1:3007/ads/api/meta/oauth/callback",
+    enableMetaWrites: false,
+    emergencyReadOnly: true,
+    allowedAdAccountIds: [],
+    secretConfigured: state.secretConfigured,
+    updatedAt: null,
+    missing: state.configured ? [] : ["META_APP_ID", "META_APP_SECRET"]
+  };
+}
